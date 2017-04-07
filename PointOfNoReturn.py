@@ -1,13 +1,25 @@
+# /usr/bin/python3
+# coding=utf-8
 # Point Of No Return
+
+"""
+The game file, contains the game and the interface to the players.
+"""
 
 import tkinter as tk
 import numpy as np
-#import RLAgent as agent
+import ann
+import act_func
+import trainer
 
 
 class Dot:
 
-    def __init__(self, cvs, x, y, state = 0):
+    """
+    Class for the points the player can visit.
+    """
+
+    def __init__(self, cvs, x, y, state=0):
         self.cvs = cvs
         self.x = x
         self.y = y
@@ -17,22 +29,35 @@ class Dot:
                                             self.y * 30 + 35)
         self.setstate(state)
 
-    def setstate(self, state): # 0 = unbesetzt, .5 = aktuell besetzt, 1 = bereits besucht
+    def setstate(self, state): # -1 = bereits besucht, 0 = unbesetzt, 1 = aktuell besetzt
+        """
+        Sets the state of Dot.
+        """
         self.state = state
-        self.cvs.itemconfigure(self.graphic, fill = {0: 'black',
-                                                     .5: 'red',
-                                                     1: 'white'}[self.state])
+        self.cvs.itemconfigure(self.graphic, fill={-1: 'black',
+                                                   0: 'white',
+                                                   1: 'red'}[self.state])
 
     def state(self):
+        """
+        Returns current state of Dot.
+        """
         return self.state
 
 
-class Game:
+class PONR:
 
-    def __init__(self, P1, P2, len_x = 17, len_y = 9, goal = 5):
+    """
+    Main class of the game.
+    """
+
+    def __init__(self, P1, P2, len_x=17, len_y=9, goal=5):
         self.pos = [int(len_x / 2), int(len_y / 2)] # Position des Spielers
-        self.data = np.zeros((len_x - 1) * (len_y - 1) * 4 + len_x + len_y - 2) # waagerecht, senkrecht, diagonal (lo ru, ro lu)
-        self.touched_points = []
+        self.lines_data = [np.zeros((len_x - 1) * len_y),       # waagerecht
+                           np.zeros(len_x * (len_y - 1)),       # senkrecht
+                           np.zeros((len_x - 1) * (len_y - 1)), # diagonal lo ru
+                           np.zeros((len_x - 1) * (len_y - 1))] # diagonal ro lu
+        self.touched_points = [self.pos]
         self.diagonals = []
         self.P1 = P1
         self.P2 = P2
@@ -44,184 +69,234 @@ class Game:
 
         self.root = tk.Tk()
         self.root.geometry(str(60 + self.size[0] * 30) + 'x' + str(30 + self.size[1] * 30))
-        self.root.resizable(width = False, height = False)
+        self.root.resizable(width=False, height=False)
         self.root.update_idletasks()
         self.cvs = tk.Canvas(self.root,
-                             bg = 'white',
-                             height = self.root.winfo_height(),
-                             width = self.root.winfo_width())
+                             bg='white',
+                             height=self.root.winfo_height(),
+                             width=self.root.winfo_width())
         self.cvs.create_rectangle(0,
                                   15 + 30 * (self.size[1] - self.goal) / 2,
                                   20,
                                   15 + 30 * (self.size[1] + self.goal) / 2,
-                                  fill = 'black')
+                                  fill='black')
         self.cvs.create_rectangle(self.root.winfo_width() - 20,
                                   15 + 30 * (self.size[1] - self.goal) / 2,
                                   self.root.winfo_width(),
                                   15 + 30 * (self.size[1] + self.goal) / 2,
-                                  fill = 'black')
+                                  fill='black')
         self.cvs.pack()
 
         self.Dots = []
         for x in range(self.size[0]):
             for y in range(self.size[1]):
                 self.Dots.append(Dot(self.cvs, x, y))
-        self.find_Dot(self.pos).setstate(.5)
+        self.find_Dot(self.pos).setstate(1)
         self.root.update_idletasks()
 
     def start(self):
+        """
+        Mainloop of the game.
+        """
         while True:
             for player in [self.P1, self.P2]:
-                for turn in range(3):
-                    if self.player_turn(player):
+                for turn_number in range(3):
+                    if self.player_turn(player,
+                                        turn_number):
                         continue
                     else:
-                        for turn in range(6):
-                            self.player_turn(player, freistoss = True)
+                        for turn_number in range(6):
+                            self.player_turn(player,
+                                             turn_number,
+                                             free_kick=True)
+                        if self.pos in self.touched_points:
+                            if player == self.P1:
+                                self.win(self.P2)
+                            else:
+                                self.win(self.P1)
+                            return
                         break
-                    self.check_for_win()
 
     def find_Dot(self, pos):
+        """
+        Finds a Dot in self.Dots and returns it.
+        """
         for Dot in self.Dots:
             if Dot.x == pos[0] and Dot.y == pos[1]:
                 return Dot
 
     def connect(self, pos1, pos2):
+        """
+        Connects two Dots with a line.
+        """
         self.cvs.create_line(45 + pos1[0] * 30,
                              30 + pos1[1] * 30,
                              45 + pos2[0] * 30,
                              30 + pos2[1] * 30,
-                             width = 3)
+                             width=3)
 
-    def player_turn(self, player, freistoss = False):
-        self.root.title(player.name + ' ist am Zug')
+    def player_turn(self, player, turn_number, free_kick=False):
+        """
+        Executes one player turn.
+        """
+        if free_kick == False:
+            self.root.title(player.name + ' ist am Zug')
+        else:
+            self.root.title('Freistoß für ' + player.name)
         prev_pos = self.pos
-        prev_data = self.data
-        if not freistoss and not self.can_move():
+        prev_data = self.lines_data
+        if not free_kick and not self.can_move():
             return False
-        step = player.get_input(self.root)
+        foo = [0, 0, 0, 0, 0, 0]
+        foo[turn_number] = 1
+        step = player.get_input(self.root,
+                                np.append(np.array(foo.append(int(free_kick))),
+                                          self.lines_data))
         new_pos = [self.pos[0] + step[0],
                    self.pos[1] + step[1]]
-        if not freistoss and self.rules(prev_pos, new_pos, self.touched_points, self.diagonals):
-            new_data = self.data
-            if step[0] == 0:
-                index = (+ (self.size[0] - 1)
-                         * self.size[1]
-                         + min(prev_pos[1], new_pos[1])
-                         * self.size[0]
-                         + prev_pos[0])
-            elif step[1] == 0:          # waagerecht
-                index = (+ prev_pos[1]
-                         * (self.size[0] - 1)
-                         + min(prev_pos[0], new_pos[0]))
-            else:                       # diagonal
-                index = (+ (self.size[0] - 1)
-                         * self.size[1]
-                         + (self.size[1] - 1)
-                         * self.size[0])
-                if step[0] == step[1]:  # ro lu
-                    index += (+ (self.size[0] - 1)
-                              * (self.size[1] - 1)
-                              + min(prev_pos[1], new_pos[1])
-                              * self.size[0]
-                              + min(prev_pos[0], new_pos[0]))
-                else:                   # lo ru
-                    index += (+ min(prev_pos[1], new_pos[1])
-                              * self.size[0]
-                              + min(prev_pos[0], new_pos[0]))
-            new_data[index] = 1
+        if self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
+                                            (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == -1:
+            self.win(self.P2)
+        elif self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
+                                              (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == self.size[0]:
+            self.win(self.P1)
+        elif not free_kick and self.rules(prev_pos, new_pos) or free_kick:
+            index = (+ min(prev_pos[1], new_pos[1])
+                     * (self.size[0] - 1)
+                     + min(prev_pos[0], new_pos[0]))
+            if step[0] == 0:        # senkrecht
+                self.lines_data[1][index] = 1
+            elif step[1] == 0:      # waagerecht
+                self.lines_data[0][index] = 1
+            elif step[0] == step[1]:# diagonal ro lu
+                self.lines_data[3][index] = 1
+            else:                   # diagonal lo ru
+                self.lines_data[2][index] = 1
             self.pos = new_pos
-            self.data = new_data
-            self.find_Dot(prev_pos).setstate(1)
-            self.find_Dot(new_pos).setstate(.5)
+            self.find_Dot(prev_pos).setstate(-1)
+            self.find_Dot(new_pos).setstate(1)
             self.connect(prev_pos, new_pos)
             self.touched_points.append(new_pos)
             self.diagonals.append([prev_pos, new_pos])
             self.root.update_idletasks()
-        elif freistoss:
-            self.pos = new_pos
-            self.find_Dot(prev_pos).setstate(1)
-            self.find_Dot(new_pos).setstate(.5)
-            self.connect(prev_pos, new_pos)
-            self.root.update_idletasks()
         else:
-            self.player_turn(player)
+            self.player_turn(player, turn_number, free_kick)
         return True
 
     def can_move(self):
-        return True in map(lambda x: x != False,
-                           [self.rules(self.pos,
-                                       step,
-                                       self.touched_points,
-                                       self.diagonals) for step in [[-1, -1],
-                                                                    [ 0, -1],
-                                                                    [ 1, -1],
-                                                                    [ 1,  0],
-                                                                    [ 1,  1],
-                                                                    [ 0,  1],
-                                                                    [-1,  1],
-                                                                    [-1,  0]]])
+        """
+        Checks if the player can move.
+        """
+        for step in [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1],[-1, 0]]:
+            if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]]):
+                return True
+        return False
 
-    def check_for_win(self):
-        return self.pos in [[0, goal] for goal in range(0)] + [[self.size[0], goal] for goal in range(0)]
-
-    def rules(self, prev_pos, new_pos, touched_points, diagonals):
+    def rules(self, prev_pos, new_pos):
+        """
+        Checks if all rules were followed.
+        """
         if (prev_pos[0] != new_pos[0]) and (prev_pos[1] != new_pos[1]):                     #"Wenn es eine Diagonale ist, dann..."
             cd = [[new_pos[0], prev_pos[1]], [prev_pos[0], new_pos[1]]]                     #cd = corresponding diagonal
-            if not (cd in diagonals or [cd[1], cd[0]] in diagonals):                        #"Wenn cd nicht in der Liste der bereits vorhandenen Diagonalen, dann..."
+            if not (cd in self.diagonals or [cd[1], cd[0]] in self.diagonals):              #"Wenn cd nicht in der Liste der bereits vorhandenen Diagonalen, dann..."
                 a = True                                                                    #Regeln eingehalten; Diagonale kann gezeichnet werden
             else:
                 a = False
         else:
             a = True                                                                        #Regeln eingehalten, aber es ist keine Diagonale
                                                                                             #Regeln nicht eingehalten; Diagonale darf nicht gezeichnet werden
-        return ((0 <= new_pos[0] <= self.size[0] and 0 <= new_pos[1] <= self.size[1]) and   #Spielfeldgroesse
-                (not new_pos in touched_points) and                                         #Betretene Punkte nicht erneut betreten
+        return ((0 <= new_pos[0] < self.size[0] and 0 <= new_pos[1] < self.size[1]) and     #Spielfeldgroesse
+                (not new_pos in self.touched_points) and                                    #Betretene Punkte nicht erneut betreten
                 (a))                                                                        #Kreuzen der bereits vorhandenen Diagonalen
 
     def reward(self):
+        """
+        Calculates a reward for a turn.
+        """
+        pass
+    
+    def win(self, player):
+        self.root.destroy()
+        win_msg = tk.Tk()
+        win_msg.title('Ende')
+        win_msg.geometry('200x100')
+        tk.Label(win_msg,
+                 text=player.name + ' hat gewonnen!').place(x=100, y=25, anchor=tk.CENTER)
+        tk.Button(win_msg,
+                  text='Spielverlauf ansehen',
+                  command=self.game_replay).place(x=100, y=50, anchor=tk.CENTER)
+        tk.Button(win_msg,
+                  text='Schließen',
+                  command=win_msg.destroy).place(x=100, y=80, anchor=tk.CENTER)
+        win_msg.mainloop()
+    
+    def game_replay(self):
         pass
 
 
 class Interface:
+    
+    """
+    The game interface to a player (human / AI).
+    """
 
     human = 'human'
     computer = 'com'
 
-    def __init__(self, type, name = None):
+    def __init__(self, type, name=None):
         if type in ['human', 'com']:
             self.type = type
         else:
             raise TypeError('Interface type must be "human" or "com".')
+        if type == 'com':
+            self.net = ann.Neural_Network(name,
+                                          543,
+                                          (8, act_func.tanh),
+                                          [(543, act_func.tanh),
+                                           (543, act_func.tanh),
+                                           (543, act_func.tanh)],
+                                          .0)
+            self.trainer = trainer.Trainer(self.net,
+                                           0.0001,
+                                           0.3)
         self.name = name if name != None else type
 
     def set_step(self, step):
+        """
+        Sets the internal step variable.
+        """
         self.step = {'KP_7': [-1, -1],
-                     'KP_8': [ 0, -1],
-                     'KP_9': [ 1, -1],
-                     'KP_6': [ 1,  0],
-                     'KP_3': [ 1,  1],
-                     'KP_2': [ 0,  1],
-                     'KP_1': [-1,  1],
-                     'KP_4': [-1,  0]}[step]
+                     'KP_8': [0, -1],
+                     'KP_9': [1, -1],
+                     'KP_6': [1, 0],
+                     'KP_3': [1, 1],
+                     'KP_2': [0, 1],
+                     'KP_1': [-1, 1],
+                     'KP_4': [-1, 0]}[step]
         self.master.quit()
 
-    def get_input(self, master):
-        self.master = master
+    def get_input(self, master, data):
+        """
+        Gets an input from the player (human or AI).
+        """
         if self.type == 'human':
+            self.master = master
             for event in ['<KP_7>', '<KP_8>', '<KP_9>', '<KP_6>', '<KP_3>', '<KP_2>', '<KP_1>', '<KP_4>']:
                 self.master.bind(event, lambda event: self.set_step(event.keysym))
             self.master.mainloop()
         elif self.type == 'com':
-            #agent.getinput()
-            pass
+            Qvalues = ann.forward(data) # 8 element array
+            self.step = {0: [-1, -1],
+                         1: [0, -1],
+                         2: [1, -1],
+                         3: [1, 0],
+                         4: [1, 1],
+                         5: [0, 1],
+                         6: [-1, 1],
+                         7: [-1, 0]}[np.argmax(Qvalues)]
         return self.step
 
-    def return_info(self, data):
-        pass ## Infos an Netz weitergeben
-
-
-if __name__ == '__main__':
-    foo = Game(Interface(Interface.human, 'Spieler 1'),
-               Interface(Interface.human, 'Spieler 2'))
-    foo.start()
+    def return_info(self, state, action, reward, new_state):
+        """
+        Passes the current game stats to the AI.
+        """
