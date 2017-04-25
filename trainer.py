@@ -25,55 +25,55 @@ class Trainer(object):
         '''
         Makes a local reference to Neural Network.
         '''
-        
+
         # learning rate
         self.eta = eta
-        
+
         # momentum
         self.alpha = alpha
-        
+
         # local reference
         self.Net = Net
 
-        
+
     def train(self, inputMatrix, correctOutput,
-              max_iterations, test_inputMatrix=None, 
+              max_iterations, test_inputMatrix=None,
               test_correctOutput=None):
-        
+
         # Make empty list to store costs:
         self.J = []
         self.testJ = []
-        
+
         # stores the current changes of the weights
         self.delta = []
-        
+
         # ----------------- first without momentum------------------------
         dJdW, cost = self.Net.evaluate(inputMatrix, correctOutput)
         # tracks the error function
         self.J.append(cost)
         if test_inputMatrix is not None and test_correctOutput is not None:
-            self.testJ.append(self.Net.test(test_inputMatrix, 
+            self.testJ.append(self.Net.test(test_inputMatrix,
                                             test_correctOutput))
-                
+
         # update weights
         for x in range(0, self.Net.totalLayerNumber-1):
             self.delta.append(self.eta*dJdW[x])
             self.Net.weights[x] -= self.delta[-1]
 
         self.old_delta = self.delta
-        self.delta = []   
-        
+        self.delta = []
+
         # ----------------- secound, third ... with momentum-----------------
         count = 2
         while count <= max_iterations:
             dJdW, cost = self.Net.evaluate(inputMatrix, correctOutput)
-            
+
             # tracks the error function
             self.J.append(cost)
             if test_inputMatrix is not None and test_correctOutput is not None:
-                self.testJ.append(self.Net.test(test_inputMatrix, 
+                self.testJ.append(self.Net.test(test_inputMatrix,
                                             test_correctOutput))
-                
+
             # update weights
             for x in range(0, self.Net.totalLayerNumber-1):
                 self.delta.append((1-self.alpha)*self.eta*dJdW[x]\
@@ -82,6 +82,6 @@ class Trainer(object):
 
             self.old_delta = self.delta
             self.delta = []
-            
+
             count += 1
-            
+

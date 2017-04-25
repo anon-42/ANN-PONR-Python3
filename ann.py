@@ -1,3 +1,7 @@
+# /usr/bin/python3
+# coding=utf-8
+# Artifical Neural Net
+
 '''
 Created on 28.01.2017
 

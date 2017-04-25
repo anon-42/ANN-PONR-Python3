@@ -4,6 +4,9 @@
 
 """
 The game file, contains the game and the interface to the players.
+
+@author: anon-42
+@version: beta
 """
 
 import tkinter as tk
@@ -16,7 +19,7 @@ import trainer
 class Dot:
 
     """
-    Class for the points the player can visit.
+    Class for tdhe points the player can visit.
     """
 
     def __init__(self, cvs, x, y, state=0):
@@ -119,7 +122,7 @@ class PONR:
 
     def find_Dot(self, pos):
         """
-        Finds a Dot in self.Dots and returns it.
+        Finds a Dot object in self.Dots given its coordinates and returns it.
         """
         for Dot in self.Dots:
             if Dot.x == pos[0] and Dot.y == pos[1]:
@@ -127,7 +130,7 @@ class PONR:
 
     def connect(self, pos1, pos2):
         """
-        Connects two Dots with a line.
+        Draws a line to connect two dots.
         """
         self.cvs.create_line(45 + pos1[0] * 30,
                              30 + pos1[1] * 30,
@@ -216,6 +219,9 @@ class PONR:
         pass
     
     def win(self, player):
+        """
+        Final method of the game, is called when one player has won.
+        """
         self.root.destroy()
         win_msg = tk.Tk()
         win_msg.title('Ende')
