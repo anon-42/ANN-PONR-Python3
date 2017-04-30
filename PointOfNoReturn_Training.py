@@ -99,11 +99,7 @@ class PONR:
             if Dot.x == pos[0] and Dot.y == pos[1]:
                 return Dot
 
-<<<<<<< HEAD
-    def player_turn(self, player, turn_number, free_kick=False):
-=======
     def player_turn(self, player, turn_number, free_kick=False, repetition=False):
->>>>>>> origin/nearly-finished
         """
         Executes one player turn.
         """
@@ -117,13 +113,6 @@ class PONR:
         step = player.get_input(self.root, state)
         new_pos = [self.pos[0] + step[0],
                    self.pos[1] + step[1]]
-<<<<<<< HEAD
-        if self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
-                                            (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == -1:
-            self.win(self.P2)
-        elif self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
-                                              (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == self.size[0]:
-=======
         new_state = np.array([])
         if self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
                                             (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == -1:	# goal on left side
@@ -138,7 +127,6 @@ class PONR:
                 reward = -1
             else:
                 reward = 1
->>>>>>> origin/nearly-finished
             self.win(self.P1)
         elif not free_kick and self.rules(prev_pos, new_pos) or free_kick:
             index = (+ min(prev_pos[1], new_pos[1])
@@ -157,10 +145,6 @@ class PONR:
             self.find_Dot(new_pos).setstate(1)
             self.touched_points.append(new_pos)
             self.diagonals.append([prev_pos, new_pos])
-<<<<<<< HEAD
-        else:
-            self.player_turn(player, turn_number, free_kick)
-=======
             reward = self.reward()
             foo = [0, 0, 0, 0, 0, 0]
             foo[turn_number] = 1
@@ -169,7 +153,6 @@ class PONR:
             self.player_turn(player, turn_number, free_kick, repetition=True)
         if not repetition:
             player.update_rm(state, step, reward, new_state)
->>>>>>> origin/nearly-finished
         return True
 
     def can_move(self):
@@ -198,22 +181,11 @@ class PONR:
                 (not new_pos in self.touched_points) and                                    #Betretene Punkte nicht erneut betreten
                 (a))                                                                        #Kreuzen der bereits vorhandenen Diagonalen
 
-<<<<<<< HEAD
-    def reward(self, goal, penalty, new_pos, prev_pos):
-=======
     def reward(self, penalty, new_pos, prev_pos):
->>>>>>> origin/nearly-finished
         """
         Calculates a reward for a turn.
         """
         # missing: enemy goal, free kick enemy and own
-<<<<<<< HEAD
-        if goal == 1:
-            return 1
-        elif goal == -1:
-        	return -1
-=======
->>>>>>> origin/nearly-finished
         elif penalty == 1:
             return 0.5
         elif new_pos[0] < prev_pos[0]:
