@@ -371,18 +371,9 @@ class Interface:
                          [1, 1],
                          [0, 1],
                          [-1, 1],
-                         [-1, 0]][np.random.choice(np.arange(8), prob)]
+                         [-1, 0]][np.random.choice(np.arange(8), p=prob)]
             
             self.iterations += 1
-            '''self.step = {0: [-1, -1],
-                         1: [0, -1],
-                         2: [1, -1],
-                         3: [1, 0],
-                         4: [1, 1],
-                         5: [0, 1],
-                         6: [-1, 1],
-                         7: [-1, 0]}[np.argmax(Qvalues)]''' # list
->>>>>>> origin/nearly-finished
         return self.step
 
     def train_net(self):
@@ -409,12 +400,10 @@ class Interface:
         correctoutput = self.net.forward(state)
         maxQ = np.amax(self.net.forward(new_state), axis=1, keepdims=True)
         
-<<<<<<< HEAD
         # final state
         maxQ[np.where(np.logical_or(reward == 1, reward == -1)),:] = 0
         
-=======
->>>>>>> origin/nearly-finished
+
         index_gamma09 = np.logical_or(np.logical_and(state[:,6]==1, 
           state[:,5]==1), np.logical_and(state[:,6]==0, state[:,2]==1))
         gamma = np.where(index_gamma09, 0.9, 1)
@@ -425,11 +414,9 @@ class Interface:
           action_taken)] = reward + gamma*maxQ
         
         self.trainer.train(state, correct_output, 500)
-<<<<<<< HEAD
-=======
-    
+
     def update_rm(self, state, action, reward, new_state)
->>>>>>> origin/nearly-finished
+
 
 def main():
     pass
