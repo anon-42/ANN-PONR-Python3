@@ -256,6 +256,7 @@ class Interface:
             # softmax
             e_x = np.exp(Qvalues - np.max(Qvalues))
             prob = e_x / e_x.sum()
+            
             self.step = [[0, -1],
                          [1, -1],
                          [1, 0],
@@ -293,7 +294,7 @@ class Interface:
         maxQ = np.amax(self.net.forward(new_state), axis=1, keepdims=True)
         
         # final state
-        maxQ[np.where(r == 1),:] = 0
+        maxQ[np.where(np.logical_or(reward == 1, reward == -1)),:] = 0
         
         index_gamma09 = np.logical_or(np.logical_and(state[:,6]==1, 
           state[:,5]==1), np.logical_and(state[:,6]==0, state[:,2]==1))
