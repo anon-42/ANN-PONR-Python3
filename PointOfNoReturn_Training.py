@@ -99,7 +99,11 @@ class PONR:
             if Dot.x == pos[0] and Dot.y == pos[1]:
                 return Dot
 
+<<<<<<< HEAD
     def player_turn(self, player, turn_number, free_kick=False):
+=======
+    def player_turn(self, player, turn_number, free_kick=False, repetition=False):
+>>>>>>> origin/nearly-finished
         """
         Executes one player turn.
         """
@@ -113,11 +117,28 @@ class PONR:
         step = player.get_input(self.root, state)
         new_pos = [self.pos[0] + step[0],
                    self.pos[1] + step[1]]
+<<<<<<< HEAD
         if self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
                                             (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == -1:
             self.win(self.P2)
         elif self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
                                               (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == self.size[0]:
+=======
+        new_state = np.array([])
+        if self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
+                                            (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == -1:	# goal on left side
+            if player == self.P1:
+                reward = -1
+            else:
+                reward = 1
+            self.win(self.P2)
+        elif self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
+                                              (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == self.size[0]: # goal on right side
+            if player == self.P2:
+                reward = -1
+            else:
+                reward = 1
+>>>>>>> origin/nearly-finished
             self.win(self.P1)
         elif not free_kick and self.rules(prev_pos, new_pos) or free_kick:
             index = (+ min(prev_pos[1], new_pos[1])
@@ -136,8 +157,19 @@ class PONR:
             self.find_Dot(new_pos).setstate(1)
             self.touched_points.append(new_pos)
             self.diagonals.append([prev_pos, new_pos])
+<<<<<<< HEAD
         else:
             self.player_turn(player, turn_number, free_kick)
+=======
+            reward = self.reward()
+            foo = [0, 0, 0, 0, 0, 0]
+            foo[turn_number] = 1
+            new_state = np.append(np.array(foo.append(int(free_kick))), self.lines_data)
+        else:
+            self.player_turn(player, turn_number, free_kick, repetition=True)
+        if not repetition:
+            player.update_rm(state, step, reward, new_state)
+>>>>>>> origin/nearly-finished
         return True
 
     def can_move(self):
@@ -166,15 +198,22 @@ class PONR:
                 (not new_pos in self.touched_points) and                                    #Betretene Punkte nicht erneut betreten
                 (a))                                                                        #Kreuzen der bereits vorhandenen Diagonalen
 
+<<<<<<< HEAD
     def reward(self, goal, penalty, new_pos, prev_pos):
+=======
+    def reward(self, penalty, new_pos, prev_pos):
+>>>>>>> origin/nearly-finished
         """
         Calculates a reward for a turn.
         """
         # missing: enemy goal, free kick enemy and own
+<<<<<<< HEAD
         if goal == 1:
             return 1
         elif goal == -1:
         	return -1
+=======
+>>>>>>> origin/nearly-finished
         elif penalty == 1:
             return 0.5
         elif new_pos[0] < prev_pos[0]:
@@ -199,6 +238,7 @@ class Interface:
     """
     The game interface to a player (human / AI).
     """
+<<<<<<< HEAD
 
     human = 'human'
     computer = 'com'
@@ -267,6 +307,82 @@ class Interface:
             
             self.iterations += 1
 
+=======
+
+    human = 'human'
+    computer = 'com'
+
+    def __init__(self, type, name=None):
+        if type in ['human', 'com']:
+            self.type = type
+        else:
+            raise TypeError('Interface type must be "human" or "com".')
+        if type == 'com':
+            self.net = ann.Neural_Network(name,
+                                          543,
+                                          (8, act_func.tanh),
+                                          [(543, act_func.tanh),
+                                           (543, act_func.tanh),
+                                           (543, act_func.tanh)],
+                                          .0)
+            self.trainer = trainer.Trainer(self.net,
+                                           0.0001,
+                                           0.3)
+            self.rm = rm.ReplayMemory()
+        self.name = name if name != None else type
+        self.iterations = 0
+        
+    def set_step(self, step):
+        """
+        Sets the internal step variable.
+        """
+        self.step = {'KP_7': [-1, -1],
+                     'KP_8': [0, -1],
+                     'KP_9': [1, -1],
+                     'KP_6': [1, 0],
+                     'KP_3': [1, 1],
+                     'KP_2': [0, 1],
+                     'KP_1': [-1, 1],
+                     'KP_4': [-1, 0]}[step]
+        self.master.quit()
+
+    def get_input(self, master, data):
+        """
+        Gets an input from the player (human or AI).
+        """
+        if self.type == 'human':
+            self.master = master
+            for event in ['<KP_7>', '<KP_8>', '<KP_9>', '<KP_6>', '<KP_3>', '<KP_2>', '<KP_1>', '<KP_4>']:
+                self.master.bind(event, lambda event: self.set_step(event.keysym))
+            self.master.mainloop()
+        
+        elif self.type == 'com':
+            Qvalues = self.net.forward(data) # 8 element array
+            
+            # probability to choose an action ==> Boltzmann exploration
+            Qvalues /= (50000/x + 0.5) # T - temperature
+            
+            # softmax
+            e_x = np.exp(Qvalues - np.max(Qvalues))
+            prob = e_x / e_x.sum()
+            self.step = [[0, -1],
+                         [1, -1],
+                         [1, 0],
+                         [1, 1],
+                         [0, 1],
+                         [-1, 1],
+                         [-1, 0]][np.random.choice(np.arange(8), prob)]
+            
+            self.iterations += 1
+            '''self.step = {0: [-1, -1],
+                         1: [0, -1],
+                         2: [1, -1],
+                         3: [1, 0],
+                         4: [1, 1],
+                         5: [0, 1],
+                         6: [-1, 1],
+                         7: [-1, 0]}[np.argmax(Qvalues)]''' # list
+>>>>>>> origin/nearly-finished
         return self.step
 
     def train_net(self):
@@ -293,9 +409,12 @@ class Interface:
         correctoutput = self.net.forward(state)
         maxQ = np.amax(self.net.forward(new_state), axis=1, keepdims=True)
         
+<<<<<<< HEAD
         # final state
         maxQ[np.where(np.logical_or(reward == 1, reward == -1)),:] = 0
         
+=======
+>>>>>>> origin/nearly-finished
         index_gamma09 = np.logical_or(np.logical_and(state[:,6]==1, 
           state[:,5]==1), np.logical_and(state[:,6]==0, state[:,2]==1))
         gamma = np.where(index_gamma09, 0.9, 1)
@@ -306,6 +425,11 @@ class Interface:
           action_taken)] = reward + gamma*maxQ
         
         self.trainer.train(state, correct_output, 500)
+<<<<<<< HEAD
+=======
+    
+    def update_rm(self, state, action, reward, new_state)
+>>>>>>> origin/nearly-finished
 
 def main():
     pass
