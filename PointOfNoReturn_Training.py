@@ -15,6 +15,7 @@ import act_func
 import trainer
 import ReplayMemory as rm
 import random
+import os
 
 class Dot:
 
@@ -231,7 +232,7 @@ class Interface:
 			self.trainer = trainer.Trainer(self.net,
 										   0.0001,
 										   0.3)
-			self.rm = rm.ReplayMemory()
+			self.rm = rm.ReplayMemory(os.path.dirname(os.path.abspath(__file__)) + '/ReplayMemory.txt', 42000)
 		self.name = name if name != None else type
 		self.iterations = 0
 
