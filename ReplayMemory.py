@@ -23,10 +23,10 @@ class ReplayMemory:
         self.memory = []
         self.count = 0
         atexit.register(self.save)
-    
+
     def __iter__(self):
         return self
-    
+
     def __next__(self):
         if self.count < self.number:
             self.count += 1
@@ -34,22 +34,22 @@ class ReplayMemory:
         else:
             self.count = 0
             raise StopIteration
-    
+
     def number_of_turns(self, number):
         self.number = number
-    
+
     def save(self):
         self.file = open(self.path, 'wb')
-        pickle.dumb(memory, self.file)
+        pickle.dump(self.memory, self.file)
         self.file.close()
-    
+
     def get(self):
         return random.choice(self.memory)
-    
+
     def update(self, state, action, reward, new_state):
         self.memory.append([state, action, reward, new_state])
         if self.length < len(self.memory):
             self.memory = self.memory[1:]
-    
+
     def load(self):
         self.memory = pickle.load(self.path)
