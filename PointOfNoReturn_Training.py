@@ -217,21 +217,20 @@ class Interface:
 	computer = 'com'
 
 	def __init__(self, type, name=None):
+		global architecture, Lambda, eta, alpha
 		if type in ['human', 'com']:
 			self.type = type
 		else:
 			raise TypeError('Interface type must be "human" or "com".')
 		if type == 'com':
 			self.net = ann.Neural_Network(name,
-										  543,
-										  (8, act_func.tanh),
-										  [(543, act_func.tanh),
-										   (543, act_func.tanh),
-										   (543, act_func.tanh)],
-										  .0)
+										  architecture[0],
+										  architecture[1],
+										  architecture[2],
+										  Lambda)
 			self.trainer = trainer.Trainer(self.net,
-										   0.0001,
-										   0.3)
+										   eta,
+										   alpha)
 			self.rm = rm.ReplayMemory(os.path.dirname(os.path.abspath(__file__)) + '/ReplayMemory.txt', 42000)
 		self.name = name if name != None else type
 		self.iterations = 0
@@ -284,9 +283,9 @@ class Interface:
 		"""
 		Passes the current game stats to the AI.
 		"""
-
+		global number_of_turns, data_from_rm
 		# get trainig data from replay_memory
-		self.rm.number_of_turns(500)
+		self.rm.number_of_turns(data_from_rm)
 		data = self.rm.get()
 
 		state = data[0]
@@ -317,8 +316,22 @@ class Interface:
 		correctoutput[np.where(action_taken > 3, action_taken-1,
 		  action_taken)] = reward + gamma*maxQ
 
-		self.trainer.train(state, correctoutput, 500)
+		self.trainer.train(state, correctoutput, number_of_turns)
 
 
-def main():
-	pass
+if __name__ == '__main__':
+	global Lambda, eta, alpha, architecture, number_of_turns, data_from_rm
+	path = '/'	# must end with "/" on Linux and with "\" on Windows
+	Lambda = .0
+	eta = .0001
+	alpha = .7
+	architecture = [543,
+                    (8, act_func.tanh),
+                    [(543, act_func.tanh),
+                     (543, act_func.tanh),
+                     (543, act_func.tanh)]]
+	number_of_turns = 500
+	data_from_rm = 500
+	GAME = PONR(Interface(Interface.com, path),
+				Interface(Interface.com, 'other net'))
+	GAME.start()
