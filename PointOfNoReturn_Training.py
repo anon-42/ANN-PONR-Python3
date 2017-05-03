@@ -10,12 +10,12 @@ Copy of the game file, includes only nessessary content and no graphical code.
 """
 
 import numpy as np
-import ann
-import act_func
-import trainer
-import ReplayMemory as rm
-import random
+import artifical_neural_net as ann
+import act_func as af
+import trainer as tr
+import replay_memory as rm
 import os
+import history as hs
 
 class Dot:
 
@@ -49,10 +49,10 @@ class PONR:
 
 	def __init__(self, P1, P2, len_x=17, len_y=9, goal=5):
 		self.pos = [int(len_x / 2), int(len_y / 2)] # Position des Spielers
-		self.lines_data = [np.zeros((len_x - 1) * len_y),	   # waagerecht
-						   np.zeros(len_x * (len_y - 1)),	   # senkrecht
-						   np.zeros((len_x - 1) * (len_y - 1)), # diagonal lo ru
-						   np.zeros((len_x - 1) * (len_y - 1))] # diagonal ro lu
+		self.lines_data = [np.array([0.0 for i in range((len_x - 1) * len_y)]),			# waagerecht
+						   np.array([0.0 for i in range(len_x * (len_y - 1))]),			   # senkrecht
+						   np.array([0.0 for i in range((len_x - 1) * (len_y - 1))]),	 # diagonal lo ru
+						   np.array([0.0 for i in range((len_x - 1) * (len_y - 1))])]   # diagonal ro lu
 		self.touched_points = [self.pos]
 		self.diagonals = []
 		self.P1 = P1
@@ -105,14 +105,16 @@ class PONR:
 		"""
 		Executes one player turn.
 		"""
+		global history
 		prev_pos = self.pos
 		prev_data = self.lines_data
 		if not free_kick and not self.can_move():
 			return False
-		foo = [0, 0, 0, 0, 0, 0]
+		foo = [0.0 for i in range(6)]
 		foo[turn_number] = 1
-		state = np.append(np.array(foo.append(int(free_kick))), self.lines_data)
-		step = player.get_input(self.root, state)
+		foo.append(int(free_kick))
+		state = np.append(np.array(foo), np.concatenate(self.lines_data))
+		step = player.get_input(state)
 		new_pos = [self.pos[0] + step[0],
 				   self.pos[1] + step[1]]
 		new_state = np.array([])
@@ -155,6 +157,7 @@ class PONR:
 			self.player_turn(player, turn_number, free_kick, repetition=True)
 		if not repetition:
 			self.P1.rm.update(state, step, reward, new_state)
+			history.add_turn([(str(int(player == self.P1)), state, step, reward)])
 		return True
 
 	def can_move(self):
@@ -212,81 +215,47 @@ class Interface:
 	"""
 	The game interface to a player (human / AI).
 	"""
-
-	human = 'human'
-	computer = 'com'
-
-	def __init__(self, type, name=None):
-		global architecture, Lambda, eta, alpha
-		if type in ['human', 'com']:
-			self.type = type
-		else:
-			raise TypeError('Interface type must be "human" or "com".')
-		if type == 'com':
-			self.net = ann.Neural_Network(name,
-										  architecture[0],
-										  architecture[1],
-										  architecture[2],
-										  Lambda)
-			self.trainer = trainer.Trainer(self.net,
-										   eta,
-										   alpha)
-			self.rm = rm.ReplayMemory(os.path.dirname(os.path.abspath(__file__)) + '/ReplayMemory.txt', 42000)
-		self.name = name if name != None else type
+	def __init__(self, name=None):
+		global architecture, Lambda, eta, alpha, net
+		self.net = net
+		self.trainer = tr.Trainer(self.net, eta, alpha)
+		self.name = name if name != None else '<empty>'
 		self.iterations = 0
 
-	def set_step(self, step):
+	def get_input(self, data):
 		"""
-		Sets the internal step variable.
+		Gets an input from the ann.
 		"""
-		self.step = {'KP_7': [-1, -1],
-					 'KP_8': [0, -1],
-					 'KP_9': [1, -1],
-					 'KP_6': [1, 0],
-					 'KP_3': [1, 1],
-					 'KP_2': [0, 1],
-					 'KP_1': [-1, 1],
-					 'KP_4': [-1, 0]}[step]
-		self.master.quit()
+		global counter
+		Qvalues = self.net.forward(data) # 8 element array
 
-	def get_input(self, master, data):
-		"""
-		Gets an input from the player (human or AI).
-		"""
-		if self.type == 'human':
-			self.master = master
-			for event in ['<KP_7>', '<KP_8>', '<KP_9>', '<KP_6>', '<KP_3>', '<KP_2>', '<KP_1>', '<KP_4>']:
-				self.master.bind(event, lambda event: self.set_step(event.keysym))
-			self.master.mainloop()
+		# probability to choose an action ==> Boltzmann exploration
+		Qvalues /= (50000/counter + 0.5) # T - temperature
+		counter += 1
 
-		elif self.type == 'com':
-			Qvalues = self.net.forward(data) # 8 element array
+		# softmax
+		e_x = np.exp(Qvalues - np.max(Qvalues))
+		prob = e_x / e_x.sum()
+		self.step = [[0, -1],
+						[1, -1],
+						[1, 0],
+						[1, 1],
+						[0, 1],
+						[-1, 1],
+						[-1, 0],
+						[-1, -1]][np.random.choice(np.arange(8), p=prob)]
 
-			# probability to choose an action ==> Boltzmann exploration
-			Qvalues /= (50000/x + 0.5) # T - temperature
-
-			# softmax
-			e_x = np.exp(Qvalues - np.max(Qvalues))
-			prob = e_x / e_x.sum()
-			self.step = [[0, -1],
-						 [1, -1],
-						 [1, 0],
-						 [1, 1],
-						 [0, 1],
-						 [-1, 1],
-						 [-1, 0]][np.random.choice(np.arange(8), p=prob)]
-
-			self.iterations += 1
+		self.iterations += 1
 		return self.step
 
 	def train_net(self):
 		"""
 		Passes the current game stats to the AI.
 		"""
-		global number_of_turns, data_from_rm
+		global number_of_turns, data_from_rm, rm
 		# get trainig data from replay_memory
 		self.rm.number_of_turns(data_from_rm)
-		data = self.rm.get()
+		data = rm.get()
 
 		state = data[0]
 		action = np.array([data[1]])
@@ -320,18 +289,29 @@ class Interface:
 
 
 if __name__ == '__main__':
-	global Lambda, eta, alpha, architecture, number_of_turns, data_from_rm
-	path = '/'	# must end with "/" on Linux and with "\" on Windows
+	global Lambda, eta, alpha, architecture, number_of_turns, data_from_rm, net, counter
+	path = os.path.dirname(os.path.abspath(__file__)) + '/saves/'	# must end with "/" on Linux and with "\" on Windows
+	history = hs.History(path + 'History')
+	rm = rm.ReplayMemory(path + 'ReplayMemory.rm', 42000)
 	Lambda = .0
 	eta = .0001
 	alpha = .7
-	architecture = [543,
-                    (8, act_func.tanh),
-                    [(543, act_func.tanh),
-                     (543, act_func.tanh),
-                     (543, act_func.tanh)]]
+	input_layer = 543
+	output_layer = (8, af.tanh)
+	hidden_layers = [(543, af.tanh),
+					 (543, af.tanh),
+					 (543, af.tanh)]
 	number_of_turns = 500
 	data_from_rm = 500
-	GAME = PONR(Interface(Interface.com, path),
-				Interface(Interface.com, 'other net'))
-	GAME.start()
+	net = ann.Neural_Network(path + 'DATA',
+							 input_layer,
+							 output_layer,
+							 hidden_layers,
+							 Lambda)
+	counter = 1
+	while True:
+		GAME = PONR(Interface('main net'),
+					Interface('dummy net'))
+		#history.setGame(hs.generateName('o', 'i', 1))
+		GAME.start()
+		ann.save()
