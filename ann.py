@@ -1,7 +1,3 @@
-# /usr/bin/python3
-# coding=utf-8
-# Artifical Neural Net
-
 '''
 Created on 28.01.2017
 
@@ -19,7 +15,7 @@ Contains the main ANN.
 import numpy as np
 import act_func
 import pickle
-import gc
+import atexit
 
 class Neural_Network(object):
     '''
@@ -27,7 +23,7 @@ class Neural_Network(object):
     '''
 
     def __init__(self, name,  inputLayer, outputLayer, hiddenLayers=[],
-                  Lambda=0.0, recurrent=None):
+                  Lambda=0.0, savecount=0):
         '''
         Constructor
         '''
@@ -36,7 +32,6 @@ class Neural_Network(object):
         self.inputLayer = inputLayer
         self.hiddenLayers = hiddenLayers
         self.outputLayer = outputLayer
-        self.recurrent = recurrent
         
         # layer size
         self.layerSize = [inputLayer]
@@ -48,8 +43,8 @@ class Neural_Network(object):
         # random initialization of the weights 
         self.weights = []
         for x in range(0, len(self.hiddenLayers)+1):
-            self.weights.append(np.random.rand(self.layerSize[x]+1, 
-                                               self.layerSize[x+1])*2-1)
+            self.weights.append((np.random.rand(self.layerSize[x]+1, 
+                                               self.layerSize[x+1])*2-1))
             
         # activation function of each layer
         self.act_func_list = [None]
@@ -57,28 +52,22 @@ class Neural_Network(object):
             self.act_func_list.append(layer[1])
         self.act_func_list.append(self.outputLayer[1])
         
-        #  recurrent layer
-        if self.recurrent is not None:
-            print('check')
-            self.cloned_layer = self.recurrent[0]
-            self.target_layer = self.recurrent[1]
-            self.buffer = np.random.rand(self.layerSize[self.cloned_layer])
-            self.weights[self.target_layer-1] = np.random.rand(
-              (self.layerSize[self.taget_layer-1] 
-              + self.layerSize[self.cloned_layer]),
-              self.layerSize[self.target_layer])
-        else:
-            self.cloned_layer = None
-            self.target_layer = None
-            self.buffer = None
-        
         # model complexity
         self.Lambda = Lambda
         
         # others
-        self.savecount = 0
+        self.savecount = savecount
         self.name = name
-    
+        
+        # makes sure to save
+        #atexit.register(self.__del__)
+        
+        # try to load existing net
+        try:
+            self.load(self.name + str(self.savecount) + '.pkl')
+        except:
+            pass
+
     def randomizeNet(self):
         # weights
         self.weights = []
@@ -95,7 +84,6 @@ class Neural_Network(object):
               (self.layerSize[self.taget_layer-1] 
               + self.layerSize[self.cloned_layer]),
               self.layerSize[self.target_layer])
-        
         
     def forward(self, inputMatrix):
         '''
@@ -179,9 +167,27 @@ class Neural_Network(object):
         self.prediction = self.forward(inputMatrix)
         return self.costFunction(inputMatrix, correctOutput)
 
+    def neurons_influence(self, minimum):
+        ''' 
+        This method adds all the absolutes of the outgoing weights of a neuron
+        together and computes the average. A lower number can be a clue for an 
+        unnecessary neuron. 
+        '''
+        influence = []
+        below_minimum = []
+        for element in self.weights:
+            size = element.shape[1]
+            influence.append(np.sum(np.absolute(element)/size, axis=1))
+            count = 0
+            for test in influence[-1]:
+                if test < minimum:
+                    count += 1
+            below_minimum.append(count)
+        return influence, below_minimum
+
     def check(self):
         '''
-        This method show informations about the network.
+        This method show informations about the network architecture.
         '''        
         print('__Network architectiture__')
         print('InputLayerSize: ', self.layerSize[0])
@@ -194,51 +200,50 @@ class Neural_Network(object):
         for element in range(len(self.act_func_list)):
             print('Activation functions in layer {}:'.format(element), 
                   self.act_func_list[element])   
-        
+    
+    # -----------------only for numerical gradient checking------------------
+    def getWeights(self):
+        '''
+        Return a one dimensional vector of all weights together.
+        '''
+        vectors = []
+        for element in self.weights:
+            vectors.append(element.ravel())
+        onevector = np.concatenate(vectors)
+        return onevector
+    
+    def setWeights(self, params):
+        '''
+        Set the weights by using a single parameter vector.
+        '''
+        w_start = 0
+        for x in range(0, self.totalLayerNumber-1):
+            w_end = w_start + self.layerSize[x+1]*(self.layerSize[x]+1)
+            self.weights[x] = np.reshape(params[w_start:w_end],
+                                         (self.layerSize[x]+1, self.layerSize[x+1]))
+            w_start = w_end
+
+    def computeGradients(self, inputMatrix, correctOutput):
+        self.prediction = self.forward(inputMatrix) 
+        dJdW = self.costFunctionPrime(inputMatrix, correctOutput)
+        vectors = []
+        for element in dJdW:
+            vectors.append(element.ravel())
+        onevector = np.concatenate(vectors)
+        return onevector
+    # ---------------------------------------------------------------
+    
     def save(self):
         self.savecount += 1
-        # work in progress (not optimal)
-        save_list = [
-        self.inputLayer,
-        self.hiddenLayers,
-        self.outputLayer,
-        self.recurrent,
-        self.layerSize,
-        self.totalLayerNumber,
-        self.weights,
-        self.act_func_list,
-        self.cloned_layer,
-        self.target_layer,
-        self.buffer,
-        self.prediction,
-        self.Lambda,
-        self.savecount,
-        self.name]
-        
-        file = open(self.name + str(self.savecount) + '.pkl', 'wb')
-        pickle.dump(save_list, file)
+        file = open(self.name + str(self.savecount) + '.net', 'wb')
+        pickle.dump(self.__dict__, file)
         file.close()
-        
-    def load(self, file_name):
-        
-        file = open(file_name, 'rb')
-        save_list = pickle.load(file)
-        file.close()
-        
-        self.inputLayer = save_list[0]
-        self.hiddenLayers = save_list[1]
-        self.outputLayer = save_list[2]
-        self.recurrent = save_list[3]
-        self.layerSize = save_list[4]
-        self.totalLayerNumber = save_list[5]
-        self.weights = save_list[6]
-        self.act_func_list = save_list[7]
-        self.cloned_layer = save_list[8]
-        self.target_layer = save_list[9]
-        self.buffer = save_list[10]
-        self.prediction = save_list[11]
-        self.Lambda = save_list[12]
-        self.savecount = save_list[13]
-        self.name = save_list[14]
 
- 
+    def load(self, file_name):
+        file = open(file_name, 'rb')
+        instance = pickle.load(file)
+        file.close()
+        self.__dict__ = instance
+        
+    def __del__(self):
+        self.save()
