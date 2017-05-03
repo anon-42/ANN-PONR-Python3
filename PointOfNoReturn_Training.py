@@ -73,24 +73,22 @@ class PONR:
 		"""
 		Mainloop of the game.
 		"""
+		active, passive = self.P1, self.P2
 		while True:
-			for player in [self.P1, self.P2]:
-				for turn_number in range(3):
-					if self.player_turn(player,
-										turn_number):
-						continue
-					else:
-						for turn_number in range(6):
-							self.player_turn(player,
-											 turn_number,
-											 free_kick=True)
-						if self.pos in self.touched_points:
-							if player == self.P1:
-								self.win(self.P2)
-							else:
-								self.win(self.P1)
-							return
-						break
+			for turn_number in range(3):
+				if self.player_turn(active, turn_number):
+					continue
+				else:
+					for turn_number in range(6):
+						self.player_turn(player, turn_number, free_kick=True)
+					if self.pos in self.touched_points:
+						if player == self.P1:
+							self.win(self.P2)
+						else:
+							self.win(self.P1)
+						return
+					break
+			active, passive = passive, active
 			self.P1.train_net()
 
 	def find_Dot(self, pos):
@@ -105,7 +103,7 @@ class PONR:
 		"""
 		Executes one player turn.
 		"""
-		global history
+		global history, rm
 		prev_pos = self.pos
 		prev_data = self.lines_data
 		if not free_kick and not self.can_move():
@@ -118,21 +116,22 @@ class PONR:
 		new_pos = [self.pos[0] + step[0],
 				   self.pos[1] + step[1]]
 		new_state = np.array([])
-		if self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
-											(self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == -1:	# goal on left side
+		if turn_number == 5 and new_pos in self.touched_points:
 			if player == self.P1:
 				reward = -1
+				self.win(self.P2)
 			else:
 				reward = 1
+				self.win(self.P1)
+		elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,	# goal left
+											 (self.size[1] + self.goal) // 2)] and new_pos[0] == -1:
+			reward = -1
 			self.win(self.P2)
-		elif self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
-											  (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == self.size[0]: # goal on right side
-			if player == self.P2:
-				reward = -1
-			else:
-				reward = 1
+		elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,	# goal right
+											 (self.size[1] + self.goal) // 2)] and new_pos[0] == self.size[0]:
+			reward = 1
 			self.win(self.P1)
-		elif not free_kick and self.rules(prev_pos, new_pos) or free_kick:
+		elif self.rules(prev_pos, new_pos, free_kick):
 			index = (+ min(prev_pos[1], new_pos[1])
 					 * (self.size[0] - 1)
 					 + min(prev_pos[0], new_pos[0]))
@@ -149,15 +148,15 @@ class PONR:
 			self.find_Dot(new_pos).setstate(1)
 			self.touched_points.append(new_pos)
 			self.diagonals.append([prev_pos, new_pos])
-			reward = self.reward()
+			reward = self.reward(repetition, new_pos, prev_pos)
 			foo = [0, 0, 0, 0, 0, 0]
 			foo[turn_number] = 1
-			new_state = np.append(np.array(foo.append(int(free_kick))), self.lines_data)
+			foo.append(int(free_kick))
+			new_state = np.append(np.array(foo), np.concatenate(self.lines_data))
 		else:
 			self.player_turn(player, turn_number, free_kick, repetition=True)
-		if not repetition:
-			self.P1.rm.update(state, step, reward, new_state)
-			history.add_turn([(str(int(player == self.P1)), state, step, reward)])
+		rm.update(state, step, reward, new_state)
+		history.add_turn([(str(int(player == self.P1)), state, np.array(step), reward)])
 		return True
 
 	def can_move(self):
@@ -165,11 +164,13 @@ class PONR:
 		Checks if the player can move.
 		"""
 		for step in [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1],[-1, 0]]:
-			if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]]):
+			if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]], False):
 				return True
+		if self.pos[0] in [0, self.size[1]] and self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2, (self.size[1] + self.goal) // 2)]:
+			return True
 		return False
 
-	def rules(self, prev_pos, new_pos):
+	def rules(self, prev_pos, new_pos, free_kick):
 		"""
 		Checks if all rules were followed.
 		"""
@@ -183,22 +184,21 @@ class PONR:
 			a = True																		#Regeln eingehalten, aber es ist keine Diagonale
 																							#Regeln nicht eingehalten; Diagonale darf nicht gezeichnet werden
 		return ((0 <= new_pos[0] < self.size[0] and 0 <= new_pos[1] < self.size[1]) and	 #Spielfeldgroesse
-				(not new_pos in self.touched_points) and									#Betretene Punkte nicht erneut betreten
-				(a))																		#Kreuzen der bereits vorhandenen Diagonalen
+				((not new_pos in self.touched_points) or free_kick) and									#Betretene Punkte nicht erneut betreten
+				(a or free_kick))																		#Kreuzen der bereits vorhandenen Diagonalen
 
 	def reward(self, penalty, new_pos, prev_pos):
 		"""
 		Calculates a reward for a turn.
 		"""
-		# missing: enemy goal, free kick enemy and own
-		if penalty == 1:
-			return 0.5
+		if penalty:
+			return -0.5
 		elif new_pos[0] < prev_pos[0]:
 			return -0.01
 		elif new_pos[0] > prev_pos[0]:
 			return -0.02
 		elif new_pos[0] == prev_pos[0]:
-			return 0
+			return -0.015
 
 	def win(self, player):
 		"""
@@ -216,9 +216,9 @@ class Interface:
 	The game interface to a player (human / AI).
 	"""
 	def __init__(self, name=None):
-		global architecture, Lambda, eta, alpha, net
+		global eta, alpha, net, history
 		self.net = net
-		self.trainer = tr.Trainer(self.net, eta, alpha)
+		self.trainer = tr.Trainer(self.net, eta, alpha)#, history)
 		self.name = name if name != None else '<empty>'
 		self.iterations = 0
 
@@ -227,7 +227,7 @@ class Interface:
 		Gets an input from the ann.
 		"""
 		global counter
-		Qvalues = self.net.forward(data) # 8 element array
+		Qvalues = self.net.forward(np.array([data])) # 8 element array
 
 		# probability to choose an action ==> Boltzmann exploration
 		Qvalues /= (50000/counter + 0.5) # T - temperature
@@ -236,14 +236,14 @@ class Interface:
 		# softmax
 		e_x = np.exp(Qvalues - np.max(Qvalues))
 		prob = e_x / e_x.sum()
-		self.step = [[0, -1],
-						[1, -1],
-						[1, 0],
-						[1, 1],
-						[0, 1],
-						[-1, 1],
-						[-1, 0],
-						[-1, -1]][np.random.choice(np.arange(8), p=prob)]
+		self.step = [[-1, -1],
+					 [0, -1],
+					 [1, -1],
+					 [1, 0],
+					 [1, 1],
+					 [0, 1],
+					 [-1, 1],
+					 [-1, 0]][np.random.choice(np.arange(8), p=prob.flatten())]
 
 		self.iterations += 1
 		return self.step
@@ -254,19 +254,20 @@ class Interface:
 		"""
 		global number_of_turns, data_from_rm, rm
 		# get trainig data from replay_memory
-		self.rm.number_of_turns(data_from_rm)
+		rm.number_of_turns(data_from_rm)
 		data = rm.get()
 
-		state = data[0]
+		state = np.array([data[0]])
 		action = np.array([data[1]])
 		reward = np.array([[data[2]]])
 		new_state = np.array([data[3]])
 
-		for element in self.rm:
-			state = np.append(state, (element[0]), axis=0)
+		for element in rm:
+			state = np.append(state, (np.array([element[0]])), axis=0)
 			action = np.append(action, (np.array([element[1]])), axis=0)
 			reward = np.append(reward, (np.array([[element[2]]])), axis=0)
 			new_state = np.append(new_state, (np.array([element[3]])), axis=0)
+		
 
 		# compute desired output for training purposes
 		correctoutput = self.net.forward(state)
@@ -289,7 +290,7 @@ class Interface:
 
 
 if __name__ == '__main__':
-	global Lambda, eta, alpha, architecture, number_of_turns, data_from_rm, net, counter
+	global eta, alpha, number_of_turns, data_from_rm, rm, history, net, counter
 	path = os.path.dirname(os.path.abspath(__file__)) + '/saves/'	# must end with "/" on Linux and with "\" on Windows
 	history = hs.History(path + 'History')
 	rm = rm.ReplayMemory(path + 'ReplayMemory.rm', 42000)
@@ -310,8 +311,9 @@ if __name__ == '__main__':
 							 Lambda)
 	counter = 1
 	while True:
+		print(123)
 		GAME = PONR(Interface('main net'),
 					Interface('dummy net'))
-		#history.setGame(hs.generateName('o', 'i', 1))
+		history.setGame(hs.generateName('o', 'i', 1).__next__())
 		GAME.start()
 		ann.save()

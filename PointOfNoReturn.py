@@ -101,24 +101,17 @@ class PONR:
         """
         Mainloop of the game.
         """
+        active, passive = self.P1, self.P2
         while True:
-            for player in [self.P1, self.P2]:
-                for turn_number in range(3):
-                    if self.player_turn(player,
-                                        turn_number):
-                        continue
-                    else:
-                        for turn_number in range(6):
-                            self.player_turn(player,
-                                             turn_number,
-                                             free_kick=True)
-                        if self.pos in self.touched_points:
-                            if player == self.P1:
-                                self.win(self.P2)
-                            else:
-                                self.win(self.P1)
-                            return
-                        break
+            for turn_number in range(3):
+                if self.player_turn(active, turn_number):
+                    continue
+                else:
+                    for turn_number in range(6):
+                        self.player_turn(passive, turn_number, free_kick=True)
+                    active, passive = passive, active
+                    break
+            active, passive = passive, active
 
     def find_Dot(self, pos):
         """
@@ -152,18 +145,23 @@ class PONR:
             return False
         foo = [0, 0, 0, 0, 0, 0]
         foo[turn_number] = 1
+        foo.append(int(free_kick))
         step = player.get_input(self.root,
-                                np.append(np.array(foo.append(int(free_kick))),
-                                          self.lines_data))
+                                np.append(np.array(foo), np.concatenate(self.lines_data)))
         new_pos = [self.pos[0] + step[0],
                    self.pos[1] + step[1]]
-        if self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
-                                            (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == -1:
+        if turn_number == 5 and new_pos in self.touched_points:
+            if player == self.P1:
+                self.win(self.P2)
+            else:
+                self.win(self.P1)
+        elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
+                                            (self.size[1] + self.goal) // 2)] and new_pos[0] == -1:
             self.win(self.P2)
-        elif self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
-                                              (self.size[1] + self.goal) // 2)] and self.pos[0] + step[0] == self.size[0]:
+        elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
+                                            (self.size[1] + self.goal) // 2)] and new_pos[0] == self.size[0]:
             self.win(self.P1)
-        elif not free_kick and self.rules(prev_pos, new_pos) or free_kick:
+        elif self.rules(prev_pos, new_pos, free_kick):
             index = (+ min(prev_pos[1], new_pos[1])
                      * (self.size[0] - 1)
                      + min(prev_pos[0], new_pos[0]))
@@ -191,11 +189,13 @@ class PONR:
         Checks if the player can move.
         """
         for step in [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1],[-1, 0]]:
-            if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]]):
+            if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]], False):
                 return True
+        if self.pos[0] in [0, self.size[0] - 1] and self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2, (self.size[1] + self.goal) // 2)]:
+            return True
         return False
 
-    def rules(self, prev_pos, new_pos):
+    def rules(self, prev_pos, new_pos, free_kick):
         """
         Checks if all rules were followed.
         """
@@ -208,16 +208,10 @@ class PONR:
         else:
             a = True                                                                        #Regeln eingehalten, aber es ist keine Diagonale
                                                                                             #Regeln nicht eingehalten; Diagonale darf nicht gezeichnet werden
-        return ((0 <= new_pos[0] < self.size[0] and 0 <= new_pos[1] < self.size[1]) and     #Spielfeldgroesse
-                (not new_pos in self.touched_points) and                                    #Betretene Punkte nicht erneut betreten
-                (a))                                                                        #Kreuzen der bereits vorhandenen Diagonalen
+        return ((0 <= new_pos[0] < self.size[0] and 0 <= new_pos[1] < self.size[1]) and	 #Spielfeldgroesse
+                ((not new_pos in self.touched_points) or free_kick) and									#Betretene Punkte nicht erneut betreten
+                (a or free_kick))                                                                  #Kreuzen der bereits vorhandenen Diagonalen
 
-    def reward(self):
-        """
-        Calculates a reward for a turn.
-        """
-        pass
-    
     def win(self, player):
         """
         Final method of the game, is called when one player has won.
@@ -262,9 +256,6 @@ class Interface:
                                            (543, act_func.tanh),
                                            (543, act_func.tanh)],
                                           .0)
-            self.trainer = trainer.Trainer(self.net,
-                                           0.0001,
-                                           0.3)
         self.name = name if name != None else type
 
     def set_step(self, step):
@@ -291,18 +282,13 @@ class Interface:
                 self.master.bind(event, lambda event: self.set_step(event.keysym))
             self.master.mainloop()
         elif self.type == 'com':
-            Qvalues = ann.forward(data) # 8 element array
-            self.step = {0: [-1, -1],
-                         1: [0, -1],
-                         2: [1, -1],
-                         3: [1, 0],
-                         4: [1, 1],
-                         5: [0, 1],
-                         6: [-1, 1],
-                         7: [-1, 0]}[np.argmax(Qvalues)]
+            Qvalues = self.net.forward(data) # 8 element array
+            self.step = [[-1, -1],
+                         [0, -1],
+                         [1, -1],
+                         [1, 0],
+                         [1, 1],
+                         [0, 1],
+                         [-1, 1],
+                         [-1, 0]][np.argmax(Qvalues)]
         return self.step
-
-    def return_info(self, state, action, reward, new_state):
-        """
-        Passes the current game stats to the AI.
-        """
