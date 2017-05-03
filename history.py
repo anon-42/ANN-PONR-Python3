@@ -10,6 +10,7 @@ import numpy as np
 import io
 import atexit
 import datetime
+import uuid
 
 class NoTurnLeftException(Exception):
     def __init__(self, c_turn):
@@ -34,10 +35,11 @@ class generateName():
             return self.player1\
             + '_vs_'\
             + self.player2\
-            + '_id'+str(self.c_it-1)\
-            +'_t{}-{}-{}_d{}-{}-{}'\
-            .format(now.hour, now.minute, now.second, now.day,
-                    now.month, now.year)
+            +'__dt-{}_{:02d}_{:02d}_{:02d}_{:02d}_{:02d}_{:06d}'\
+            .format(now.year, now.month, now.day, now.hour, now.minute,
+                    now.second, now.microsecond)\
+            + '__id-'+ str(uuid.uuid4())
+            
             
         else:
             raise StopIteration
@@ -93,7 +95,6 @@ class History(object):
         try:
             for row in data_list:
                 values = (self.counter,) + row
-                    #print(type(values[4]))
                 sql = 'INSERT INTO {} VALUES (?, ?, ?, ?, ?)'.format(self.game)
                 with self.connection:
                     self.cursor.execute(sql, values)
@@ -101,7 +102,7 @@ class History(object):
                         #self.connection.commit
                     self.counter += 1  
                  
-        except KeyboardInterrupt:
+        except:
             print('Problem: Could not insert the transition.')
     
     def __adapt_array(self, arr):
@@ -119,7 +120,6 @@ class History(object):
         https://stackoverflow.com/
         questions/18621513/python-insert-numpy-array-into-sqlite3-database
         '''
-        #print(type(x), text)
         out = io.BytesIO(text)
         out.seek(0)
         return np.load(out)
@@ -135,7 +135,7 @@ class History(object):
  
             self.cursor.execute("SELECT turns FROM games WHERE game = ?", 
                                 (game,))
-            data=self.cursor.fetchone()
+            data = self.cursor.fetchone()
             
             # not in database and not current game ==> new game
             if data is None and self.game != game:
@@ -168,7 +168,6 @@ class History(object):
     def get_next_turn(self, player=None):
         try:
             if player is None:
-                #---------------rework for tables------------------#
                 with self.connection:
                     
                     # player, state, action, reward
@@ -194,7 +193,6 @@ class History(object):
                     end = foo[1:] + (bar[2],)
                 
                 return end
-                #---------------rework for tables------------------#
             else:
                 with self.connection:
                     # player, state, action, reward
@@ -244,6 +242,9 @@ class History(object):
         self.cursor.execute('''ALTER TABLE {} RENAME TO {}'''.format(old, new))
                  
     def pr_all(self, gamesonly=None):
+        '''
+        Not recommended. For test purposes only.
+        '''
         self.cursor.execute('SELECT game from games')
         games = self.cursor.fetchall()
         if gamesonly is None:
