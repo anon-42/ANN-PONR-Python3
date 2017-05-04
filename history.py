@@ -3,6 +3,8 @@ Created on 22.02.2017
 
 @author: StrategeX
 @version: 1.0
+
+Saves the data of the markov decision process and the error function of the ANN.
 '''
 
 import sqlite3
@@ -15,19 +17,22 @@ import uuid
 class NoTurnLeftException(Exception):
     def __init__(self, c_turn):
         self.c_turn = c_turn
-        print('You have reached the maximum of saved turns.')
+        print('You have reached the maximunm of saved turns.')
 
 class generateName():
+    ''' 
+    Generates a game name with the help of the date, time and a unique id.
+    '''
     def __init__(self, player1, player2, numberOfGames):
         self.player1 = player1
         self.player2 = player2
         self.numberOfGames = numberOfGames
         self.c_it = 1
-
+        
     def __iter__(self):
         self.c_it = 1
         return self
-
+    
     def __next__(self):
         if self.c_it <= self.numberOfGames:
             self.c_it += 1
@@ -38,12 +43,12 @@ class generateName():
             +'__dt_{}_{:02d}_{:02d}_{:02d}_{:02d}_{:02d}_{:06d}'\
             .format(now.year, now.month, now.day, now.hour, now.minute,
                     now.second, now.microsecond)\
-            + '__id_'+ str(uuid.uuid4()).replace('-', '_')
-
-
+            + '__id-'+ str(uuid.uuid4())
+            
+            
         else:
             raise StopIteration
-
+                       
 class History(object):
     '''
     classdocs
@@ -56,41 +61,43 @@ class History(object):
         '''
         # counts the number of turns in a game
         self.counter = 1
-
+        
         # refer to the next turn
         self.c_turn = 2
-
+        
         # names for saving etc.
         self.name = name
         self.game = 'default_setting'
-
+        
         #create database
-        self.connection = sqlite3.connect(self.name+'.db',
+        self.connection = sqlite3.connect(self.name+'.db', 
           detect_types=sqlite3.PARSE_DECLTYPES)
         self.cursor = self.connection.cursor()
-
+        
         # define array data type
         sqlite3.register_adapter(np.ndarray, self.__adapt_array)
         sqlite3.register_converter('ARRAY', self.__convert_array)
-
+        
         # create table
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS games (
-            game TEXT, turns INTEGER)''')
-
+            game TEXT UNIQUE, turns INTEGER, error ARRAY)''')
+        
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS default_setting (
-            number INTEGER UNIQUE,
+            number INTEGER UNIQUE, 
             player TEXT, state ARRAY,
             action ARRAY, reward INTEGER)''')
-
-
-
+        
+        
+        
         # makes sure to save
         atexit.register(self.__del__)
-
+        
     def add_turn(self, data_list):
         '''
-        data_list = [(player, state, action, reward), ...]
-        '''
+        Allows it to add one or more turns of PONR to database.
+        
+        data_list -> [(player, state, action, reward), ...]
+        ''' 
         # insert
         try:
             for row in data_list:
@@ -98,12 +105,31 @@ class History(object):
                 sql = 'INSERT INTO {} VALUES (?, ?, ?, ?, ?)'.format(self.game)
                 with self.connection:
                     self.cursor.execute(sql, values)
-                        # maybe
-                        #self.connection.commit
-                    self.counter += 1
-
+                    self.counter += 1  
+                 
         except:
             print('Problem: Could not insert the transition.')
+    
+    def add_error(self, error):
+        '''
+        This method allows it to save the error tracking.
+        '''
+        try:
+            sql = 'UPDATE games SET error = ? WHERE game = ?'
+            values = (error, self.game)
+            with self.connection:
+                self.cursor.execute(sql, values)  
+        except:
+            print('Problem: add_error() could not insert error.')
+
+    def get_error(self):
+        ''' 
+        Returns the tracked error of a lesson.
+        '''
+        with self.connection:
+            self.cursor.execute('SELECT error FROM games WHERE game = (?)',
+                                (self.game,))
+        return self.cursor.fetchone()[0]
 
     def __adapt_array(self, arr):
         """
@@ -123,31 +149,31 @@ class History(object):
         out = io.BytesIO(text)
         out.seek(0)
         return np.load(out)
-
+    
     def setGame(self, game):
-        '''
+        ''' 
         Set the name of the current game. If the game does not exist,
         it creates a new one.
         '''
         with self.connection:
             self.cursor.execute("UPDATE games SET turns=? WHERE game=?",
                                 (self.counter, self.game))
-
-            self.cursor.execute("SELECT turns FROM games WHERE game = ?",
+ 
+            self.cursor.execute("SELECT turns FROM games WHERE game = ?", 
                                 (game,))
             data = self.cursor.fetchone()
-
+            
             # not in database and not current game ==> new game
             if data is None and self.game != game:
                 self.counter = 1
                 self.c_turn = 1
                 self.game = game
-                self.cursor.execute('''INSERT INTO games VALUES (?, ?)''',
-                                    (self.game, self.counter))
-
+                self.cursor.execute('''INSERT INTO games VALUES (?, ?, ?)''', 
+                  (self.game, self.counter, np.array([[-1], [-1]])))
+                
                 # create table
                 self.cursor.execute('''CREATE TABLE IF NOT EXISTS {} (
-                    number INTEGER UNIQUE,
+                    number INTEGER UNIQUE, 
                     player TEXT, state ARRAY,
                     action ARRAY, reward INTEGER)'''\
                     .format(self.game))
@@ -155,27 +181,34 @@ class History(object):
             # current game ==> set current turn to 1
             elif self.game == game:
                 self.c_turn = 1
-
+            
             # entry in database and not current game ==> switch to
             elif data is not None:
                 self.game = game
                 self.counter = data[0]
                 self.c_turn = 1
-
+    
     def setTurn(self, turn=1):
+        ''' 
+        Sets the turn you want to pick out.
+        '''
         self.c_turn = turn
 
     def get_next_turn(self, player=None):
+        '''
+        If a player is given, it will return the next turn of a player,
+        otherwise the next turn of a game (maybe of the other player).
+        '''
         try:
             if player is None:
                 with self.connection:
-
+                    
                     # player, state, action, reward
                     self.cursor.execute('''
                         SELECT number, player, state, action, reward FROM {}
                         WHERE number=?
                     '''.format(self.game), (self.c_turn,))
-
+                    
                     foo = self.cursor.fetchone()
                     if foo is None:
                         raise NoTurnLeftException(self.c_turn)
@@ -191,7 +224,7 @@ class History(object):
                         raise NoTurnLeftException(self.c_turn)
                     bar = bar[0]
                     end = foo[1:] + (bar[2],)
-
+                
                 return end
             else:
                 with self.connection:
@@ -199,13 +232,13 @@ class History(object):
                     self.cursor.execute('''
                         SELECT number, player, state, action, reward FROM {}
                         WHERE number BETWEEN (?) AND (?) AND player=(?)
-                    '''.format(self.game),
+                    '''.format(self.game), 
                     (self.c_turn, self.c_turn+7, player))
                     foo = self.cursor.fetchall()
                     if not foo:
                         raise NoTurnLeftException(self.c_turn)
                     foo = foo[0]
-
+                    
                     # next_state
                     next_turn = foo[0] + 1
                     self.cursor.execute('''
@@ -219,28 +252,28 @@ class History(object):
                     bar = bar[0]
                     self.c_turn = bar[0]
                     end = foo[1:] + (bar[2],)
-
+                    
                 return end
         except KeyboardInterrupt:
             return None
-
+        
     def pr_next_turn(self, player=None):
         player, state, action, reward, next_state = self.get_next_turn(player)
         print('| {:6} | {:25} ... {:25} | {:25} ... {:25} | {:25} | {:25} ... {:25} |'\
             .format(player,
-            state[1], state[-1], action[1],
+            state[1], state[-1], action[1], 
             action[-1], reward, next_state[1], next_state[-1]))
-
+        
     def deleteGame(self, game):
         with self.connection:
-            self.cursor.execute('''DELETE FROM games WHERE game=(?)''',
+            self.cursor.execute('''DELETE FROM games WHERE game=(?)''', 
                                 (self.game,))
             self.cursor.execute('''DROP TABLE {}'''\
                                 .format(self.game))
-
+    
     def renameGame(self, new, old):
         self.cursor.execute('''ALTER TABLE {} RENAME TO {}'''.format(old, new))
-
+                 
     def pr_all(self, gamesonly=None):
         '''
         Not recommended. For test purposes only.
@@ -258,14 +291,15 @@ class History(object):
                     for number, player, state, action, reward in foo:
                         print('| {:6} | {:6} | {:25} ... {:25} | {:25} ... {:25} | {:25} |'\
                               .format(number, player,
-                                      state[1], state[-1], action[1], action[-1], reward))
-
+                                      state[0], state[-1], action[0], action[-1], reward))
+                
         self.cursor.execute('SELECT * from games')
         foo = self.cursor.fetchall()
         if foo:
-            for game, turns in foo:
-                print('| {:10} | {:10} |'.format(game, turns))
-
+            for game, turns, error in foo:
+                print('| {:10} | {:10} | {:25} ... {:25} |'.format(game, turns, 
+                  error[0], error[-1]))
+    
     def __add__(self, other):
         '''
         This magical method overloads the + operator and makes the user able
@@ -282,10 +316,10 @@ class History(object):
             print(game_list)
             for element in game_list:
                 element = element[0]
-                self.cursor.execute('''SELECT EXISTS(SELECT 1 FROM games
+                self.cursor.execute('''SELECT EXISTS(SELECT 1 FROM games 
                                              WHERE game='{}' LIMIT 1)'''\
                             .format(element))
-
+                
                 # check if game already exist
                 exist = self.cursor.fetchone()[0]
                 if not exist:
@@ -299,10 +333,11 @@ class History(object):
                     print('Could not insert {} because'.format(element)
                     + ' a game with the same name'\
                     + ' already exist. Please rename and try again.')
-
+            
             self.cursor.execute("""DETACH DATABASE 'tocopy'""")
-
+                    
     def __del__(self):
         with self.connection:
             self.cursor.execute("UPDATE games SET turns=? WHERE game=?",
                                 (self.counter, self.game))
+        

@@ -23,7 +23,7 @@ class Neural_Network(object):
     '''
 
     def __init__(self, name,  inputLayer, outputLayer, hiddenLayers=[],
-                  Lambda=0.0, savecount=0):
+                  Lambda=0.0, version=1, readonly=False):
         '''
         Constructor
         '''
@@ -56,15 +56,16 @@ class Neural_Network(object):
         self.Lambda = Lambda
         
         # others
-        self.savecount = savecount
+        self.savecount = 0
         self.name = name
         
-        # makes sure to save
-        #atexit.register(self.__del__)
+        # makes sure to save or not
+        atexit.register(self.__del__)
+        self.readonly = readonly
         
         # try to load existing net
         try:
-            self.load(self.name + str(self.savecount) + '.pkl')
+            self.load(self.name + str(version) + '.net')
         except:
             pass
 
@@ -246,4 +247,5 @@ class Neural_Network(object):
         self.__dict__ = instance
         
     def __del__(self):
-        self.save()
+        if not self.readonly:
+            self.save()

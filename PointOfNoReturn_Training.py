@@ -221,7 +221,7 @@ class Interface:
 	def __init__(self, name=None):
 		global eta, alpha, net, history
 		self.net = net
-		self.trainer = tr.Trainer(self.net, eta, alpha, history)
+		self.trainer = tr.Trainer(self.net, eta, alpha)#, history)
 		self.name = name if name != None else '<empty>'
 		self.iterations = 0
 
