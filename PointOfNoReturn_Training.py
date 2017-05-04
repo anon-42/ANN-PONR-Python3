@@ -75,23 +75,24 @@ class PONR:
 		"""
 		Mainloop of the game.
 		"""
+		global next
 		active, passive = self.P1, self.P2
 		while True:
+			print(0)
 			for turn_number in range(3):
 				if self.player_turn(active, turn_number):
 					continue
 				else:
 					for turn_number in range(6):
-						self.player_turn(player, turn_number, free_kick=True)
-					if self.pos in self.touched_points:
-						if player == self.P1:
-							self.win(self.P2)
-						else:
-							self.win(self.P1)
-						return
+						self.player_turn(passive, turn_number, free_kick=True)
+						if next:
+							return
+					active, passive = passive, active
 					break
+				if next:
+					return
 			active, passive = passive, active
-			self.P1.train_net()
+
 
 	def find_Dot(self, pos):
 		"""
@@ -111,9 +112,12 @@ class PONR:
 		if not free_kick and not self.can_move():
 			return False
 		foo = [0.0 for i in range(6)]
-		foo[turn_number] = 1
+		foo[turn_number] = 1.0
 		foo.append(int(free_kick))
-		state = np.append(np.array(foo), np.concatenate(self.lines_data))
+		if player == self.P2:
+			state = np.append(np.array(foo), np.fliplr(np.concatenate(self.lines_data)))
+		else:
+			state = np.append(np.array(foo), np.concatenate(self.lines_data))
 		step = player.get_input(state)
 		new_pos = [self.pos[0] + step[0],
 				   self.pos[1] + step[1]]
@@ -151,13 +155,17 @@ class PONR:
 			self.touched_points.append(new_pos)
 			self.diagonals.append([prev_pos, new_pos])
 			reward = self.reward(repetition, new_pos, prev_pos)
-			foo = [0, 0, 0, 0, 0, 0]
-			foo[turn_number] = 1
+			foo = [0.0 for i in range(6)]
+			foo[turn_number] = 1.0
 			foo.append(int(free_kick))
-			new_state = np.append(np.array(foo), np.concatenate(self.lines_data))
+			if player == self.P2:
+				new_state = np.append(np.array(foo), np.fliplr(np.concatenate(self.lines_data)))
+			else:
+				new_state = np.append(np.array(foo), np.concatenate(self.lines_data))
 		else:
 			self.player_turn(player, turn_number, free_kick, repetition=True)
 			return True
+		step = [-step[0], -step[1]]
 		rm.update(state, step, reward, new_state)
 		history.add_turn([(str(int(player == self.P1)), state, np.array(step), reward)])
 		return True
@@ -196,9 +204,9 @@ class PONR:
 		"""
 		if penalty:
 			return -0.5
-		elif new_pos[0] < prev_pos[0]:
-			return -0.01
 		elif new_pos[0] > prev_pos[0]:
+			return -0.01
+		elif new_pos[0] < prev_pos[0]:
 			return -0.02
 		elif new_pos[0] == prev_pos[0]:
 			return -0.015
@@ -207,7 +215,8 @@ class PONR:
 		"""
 		Final method of the game, is called when one player has won.
 		"""
-		pass
+		global next
+		next = True
 
 	def game_replay(self):
 		pass
@@ -221,7 +230,7 @@ class Interface:
 	def __init__(self, name=None):
 		global eta, alpha, net, history
 		self.net = net
-		self.trainer = tr.Trainer(self.net, eta, alpha)#, history)
+		self.trainer = tr.Trainer(self.net, eta, alpha, history)
 		self.name = name if name != None else '<empty>'
 		self.iterations = 0
 
@@ -309,9 +318,9 @@ class Saver(Thread):
 		The threads main activity.
 		"""
 		while not self.stop:
-			time.sleep(900)
 			self.net.save()
 			self.rm.save()
+			time.sleep(900)
 	
 	def stop(self):
 		"""
@@ -342,9 +351,9 @@ if __name__ == '__main__':
 							 Lambda)
 	Saver(net, rm).start()
 	counter = 1
+	next = False
 	while True:
+		history.setGame(hs.generateName('main_net', 'dummy_net', 1).__next__())
 		GAME = PONR(Interface('main net'),
 					Interface('dummy net'))
-		history.setGame(hs.generateName('main net', 'dummy net', 1).__next__())
 		GAME.start()
-		ann.save()

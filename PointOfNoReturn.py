@@ -264,8 +264,9 @@ class Interface:
                                           [(543, act_func.tanh),
                                            (543, act_func.tanh),
                                            (543, act_func.tanh)],
-                                          .0)
-            self.net.load('/media/lukas/BA87-AB98/Schule/SFA 17 KNN/Softwareprodukt/saves/DATA1.net')
+                                          .0,
+                                          readonly=True)
+            self.net.load('/media/lukas/BA87-AB98/Schule/SFA 17 KNN/Softwareprodukt/DATA2.net')
         self.name = name if name != None else type
 
     def set_step(self, step):

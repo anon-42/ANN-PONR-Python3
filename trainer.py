@@ -51,7 +51,6 @@ class Trainer(object):
         
         # makes sure to save
         atexit.register(self.__del__)
-        
         # test if file already exist
         try:
             self.load()
