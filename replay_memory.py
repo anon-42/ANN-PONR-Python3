@@ -17,6 +17,13 @@ import random
 
 class ReplayMemory:
 
+    """
+    Class for managing <s,a,r,s'> training elements.\n
+    Parameters:\n
+        path -> where content will be saved at exit.
+        length -> maximum number of elements saved in the memory.
+    """
+
     def __init__(self, path, length):
         self.path = path
         self.length = length
@@ -40,20 +47,35 @@ class ReplayMemory:
             raise StopIteration
 
     def number_of_turns(self, number):
+        """
+        Sets the number of elements from self.memory returned by self.__iter__().
+        """
         self.number = number
 
     def save(self):
+        """
+        Saves self.memory at self.path using pickle.
+        """
         self.file = open(self.path, 'wb')
         pickle.dump(self.memory, self.file)
         self.file.close()
 
     def get(self):
+        """
+        Returns a random element from self.memory.
+        """
         return random.choice(self.memory)
 
     def update(self, state, action, reward, new_state):
+        """
+        Adds a new <s,a,r,s'> element to self.memory.
+        """
         self.memory.append([state, action, reward, new_state])
         if self.length < len(self.memory):
             self.memory = self.memory[1:]
 
     def load(self):
-        self.memory = pickle.load(self.path)
+        """
+        Loads an existing self.memory from self.path using pickle.
+        """
+        self.memory = pickle.load(open(self.path, 'rb'))

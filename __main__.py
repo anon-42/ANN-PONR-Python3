@@ -8,6 +8,6 @@ The main file to initiate the game.
 
 from PointOfNoReturn import PONR, Interface
 
-GAME = PONR(Interface(Interface.human, 'Spieler 1'),
+GAME = PONR(Interface(Interface.computer, 'Spieler 1'),
             Interface(Interface.human, 'Spieler 2'))
 GAME.start()

@@ -148,6 +148,15 @@ class PONR:
         foo.append(int(free_kick))
         step = player.get_input(self.root,
                                 np.append(np.array(foo), np.concatenate(self.lines_data)))
+        if player.type == 'com':
+            Qvalues = list(step.keys())
+            Qvalues.sort(reverse=True)
+            while len(Qvalues) > 0:
+                if self.rules(self.pos, [self.pos[0] + step[Qvalues[0]][0], self.pos[1] + step[Qvalues[0]][1]], free_kick):
+                    step = step[Qvalues[0]]
+                    break
+                else:
+                    Qvalues = Qvalues[1:]
         new_pos = [self.pos[0] + step[0],
                    self.pos[1] + step[1]]
         if turn_number == 5 and new_pos in self.touched_points:
@@ -229,13 +238,13 @@ class PONR:
                   text='Schließen',
                   command=win_msg.destroy).place(x=100, y=80, anchor=tk.CENTER)
         win_msg.mainloop()
-    
+
     def game_replay(self):
         pass
 
 
 class Interface:
-    
+
     """
     The game interface to a player (human / AI).
     """
@@ -256,6 +265,7 @@ class Interface:
                                            (543, act_func.tanh),
                                            (543, act_func.tanh)],
                                           .0)
+            self.net.load('/media/lukas/BA87-AB98/Schule/SFA 17 KNN/Softwareprodukt/saves/DATA1.net')
         self.name = name if name != None else type
 
     def set_step(self, step):
@@ -282,13 +292,14 @@ class Interface:
                 self.master.bind(event, lambda event: self.set_step(event.keysym))
             self.master.mainloop()
         elif self.type == 'com':
-            Qvalues = self.net.forward(data) # 8 element array
-            self.step = [[-1, -1],
-                         [0, -1],
-                         [1, -1],
-                         [1, 0],
-                         [1, 1],
-                         [0, 1],
-                         [-1, 1],
-                         [-1, 0]][np.argmax(Qvalues)]
+            Qvalues = self.net.forward(np.array([data])) # 8 element array
+            # self.step = [[-1, -1],
+            #              [0, -1],
+            #              [1, -1],
+            #              [1, 0],
+            #              [1, 1],
+            #              [0, 1],
+            #              [-1, 1],
+            #              [-1, 0]][np.argmax(Qvalues)]
+            self.step = dict(zip(Qvalues.tolist()[0], [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]))
         return self.step

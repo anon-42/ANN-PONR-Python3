@@ -10,12 +10,14 @@ Copy of the game file, includes only nessessary content and no graphical code.
 """
 
 import numpy as np
-import artifical_neural_net as ann
+import ann#artifical_neural_net as ann
 import act_func as af
 import trainer as tr
 import replay_memory as rm
 import os
 import history as hs
+import time
+from threading import Thread
 
 class Dot:
 
@@ -155,6 +157,7 @@ class PONR:
 			new_state = np.append(np.array(foo), np.concatenate(self.lines_data))
 		else:
 			self.player_turn(player, turn_number, free_kick, repetition=True)
+			return True
 		rm.update(state, step, reward, new_state)
 		history.add_turn([(str(int(player == self.P1)), state, np.array(step), reward)])
 		return True
@@ -218,7 +221,7 @@ class Interface:
 	def __init__(self, name=None):
 		global eta, alpha, net, history
 		self.net = net
-		self.trainer = tr.Trainer(self.net, eta, alpha)#, history)
+		self.trainer = tr.Trainer(self.net, eta, alpha, history)
 		self.name = name if name != None else '<empty>'
 		self.iterations = 0
 
@@ -289,6 +292,34 @@ class Interface:
 		self.trainer.train(state, correctoutput, number_of_turns)
 
 
+class Saver(Thread):
+	
+	"""
+	Thread for saving ANN and ReplayMemory instances once in 900 seconds.
+	"""
+	
+	def __init__(self, net, rm):
+		Thread.__init__(self)
+		self.net = net
+		self.rm = rm
+		self.stop = False
+
+	def run(self):
+		"""
+		The threads main activity.
+		"""
+		while not self.stop:
+			time.sleep(900)
+			self.net.save()
+			self.rm.save()
+	
+	def stop(self):
+		"""
+		Prevents the thread from continuing when called.
+		"""
+		self.stop = True
+
+
 if __name__ == '__main__':
 	global eta, alpha, number_of_turns, data_from_rm, rm, history, net, counter
 	path = os.path.dirname(os.path.abspath(__file__)) + '/saves/'	# must end with "/" on Linux and with "\" on Windows
@@ -309,11 +340,11 @@ if __name__ == '__main__':
 							 output_layer,
 							 hidden_layers,
 							 Lambda)
+	Saver(net, rm).start()
 	counter = 1
 	while True:
-		print(123)
 		GAME = PONR(Interface('main net'),
 					Interface('dummy net'))
-		history.setGame(hs.generateName('o', 'i', 1).__next__())
+		history.setGame(hs.generateName('main net', 'dummy net', 1).__next__())
 		GAME.start()
 		ann.save()
