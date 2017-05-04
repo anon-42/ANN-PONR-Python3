@@ -41,12 +41,6 @@ class Dot:
                                                    0: 'white',
                                                    1: 'red'}[self.state])
 
-    def state(self):
-        """
-        Returns current state of Dot.
-        """
-        return self.state
-
 
 class PONR:
 
@@ -135,19 +129,18 @@ class PONR:
         """
         Executes one player turn.
         """
-        if free_kick == False:
+        if not free_kick:
             self.root.title(player.name + ' ist am Zug')
         else:
             self.root.title('Freistoß für ' + player.name)
         prev_pos = self.pos
-        prev_data = self.lines_data
         if not free_kick and not self.can_move():
             return False
-        foo = [0, 0, 0, 0, 0, 0]
-        foo[turn_number] = 1
-        foo.append(int(free_kick))
+        _foo = [0, 0, 0, 0, 0, 0]
+        _foo[turn_number] = 1
+        _foo.append(int(free_kick))
         step = player.get_input(self.root,
-                                np.append(np.array(foo), np.concatenate(self.lines_data)))
+                                np.append(np.array(_foo), np.concatenate(self.lines_data)))
         if player.type == 'com':
             Qvalues = list(step.keys())
             Qvalues.sort(reverse=True)
@@ -165,10 +158,10 @@ class PONR:
             else:
                 self.win(self.P1)
         elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
-                                            (self.size[1] + self.goal) // 2)] and new_pos[0] == -1:
+                                             (self.size[1] + self.goal) // 2)] and new_pos[0] == -1:
             self.win(self.P2)
         elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,
-                                            (self.size[1] + self.goal) // 2)] and new_pos[0] == self.size[0]:
+                                             (self.size[1] + self.goal) // 2)] and new_pos[0] == self.size[0]:
             self.win(self.P1)
         elif self.rules(prev_pos, new_pos, free_kick):
             index = (+ min(prev_pos[1], new_pos[1])
@@ -197,7 +190,7 @@ class PONR:
         """
         Checks if the player can move.
         """
-        for step in [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1],[-1, 0]]:
+        for step in [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]:
             if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]], False):
                 return True
         if self.pos[0] in [0, self.size[0] - 1] and self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2, (self.size[1] + self.goal) // 2)]:
@@ -266,7 +259,7 @@ class Interface:
                                            (543, act_func.tanh)],
                                           .0,
                                           readonly=True)
-            self.net.load('/media/lukas/BA87-AB98/Schule/SFA 17 KNN/Softwareprodukt/DATA2.net')
+            self.net.load('/media/lukas/BA87-AB98/Schule/SFA 17 KNN/Softwareprodukt/trained-ANNs/DATA11.net')
         self.name = name if name != None else type
 
     def set_step(self, step):
