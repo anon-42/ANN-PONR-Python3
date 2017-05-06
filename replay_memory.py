@@ -13,7 +13,7 @@ The file containing the Replay Memory class to save game stats.
 import pickle
 import atexit
 import random
-
+import numpy as np
 
 class ReplayMemory:
 
@@ -25,57 +25,68 @@ class ReplayMemory:
     """
 
     def __init__(self, path, length):
+        
         self.path = path
         self.length = length
-        self.memory = []
-        self.count = 0
+        
+        # save arrays
+        self.state = np.zeros((self.length, 543))
+        self.action = np.zeros((self.length, 2), dtype=np.intp)
+        self.reward = np.zeros((self.length, 1))
+        self.new_state = np.zeros((self.length, 543))
+        
+        self.count = -1
+        self.filledto = 0
+        
         atexit.register(self.save)
+        
         try:
             self.load()
         except:
             pass
 
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        if self.count < self.number:
-            self.count += 1
-            return random.choice(self.memory)
-        else:
-            self.count = 0
-            raise StopIteration
-
-    def number_of_turns(self, number):
-        """
-        Sets the number of elements from self.memory returned by self.__iter__().
-        """
-        self.number = number
-
     def save(self):
         """
         Saves self.memory at self.path using pickle.
         """
-        self.file = open(self.path, 'wb')
-        pickle.dump(self.memory, self.file)
-        self.file.close()
+        file = open(self.path, 'wb')
+        pickle.dump(self.__dict__, file)
+        file.close()
 
-    def get(self):
+
+    def get(self, number):
         """
         Returns a random element from self.memory.
         """
-        return random.choice(self.memory)
+        index = np.random.choice(self.filledto, number)
+        return self.state[index,:], self.action[index,:], self.reward[index,:],\
+               self.new_state[index,:]
 
     def update(self, state, action, reward, new_state):
         """
         Adds a new <s,a,r,s'> element to self.memory.
         """
-        self.memory.append([state, action, reward, new_state])
-        if self.length < len(self.memory):
-            self.memory = self.memory[1:]
-
+        self.count += 1
+        if self.count >= self.length:
+            self.count = 0
+        
+        if self.filledto <  self.length:
+            self.filledto += 1
+        
+        self.state[self.count,:] = state
+        self.action[self.count,:] = action
+        self.reward[self.count,:] = reward
+        self.new_state[self.count,:] =  new_state
+    
+    def pr_test(self):
+        print('count: ', str(self.count)+'\n',
+              'filledto: ', str(self.filledto)+'\n',
+              'action: ', self.action)
     def load(self):
         """
         Loads an existing self.memory from self.path using pickle.
         """
-        self.memory = pickle.load(open(self.path, 'rb'))
+        file = open(self.path, 'rb')
+        instance = pickle.load(file)
+        file.close()
+        self.__dict__ = instance

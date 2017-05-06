@@ -129,7 +129,9 @@ class Trainer(object):
             if test_inputMatrix is not None and test_correctOutput is not None:
                 self.testJ.append(self.Net.test(test_inputMatrix, 
                                             test_correctOutput))
-                
+            else:
+                self.testJ.append(0)
+            
             # update weights
             for x in range(0, self.Net.totalLayerNumber-1):
                 self.delta.append((1-self.alpha)*self.eta*dJdW[x]\
@@ -144,7 +146,7 @@ class Trainer(object):
         # t2 = time.clock()
         # print('time needed: ', t2-t1, ' s')
         self.data = np.append(self.data, np.array([self.J, self.testJ]), axis=1)
-        
+
         self.save()
 
     def chooseErrorData(self, game, lesson=None):

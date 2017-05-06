@@ -15,13 +15,14 @@ import act_func as af
 import trainer as tr
 import replay_memory as rm
 import os
-import sys
 import history as hs
 import time
 from threading import Thread
+import atexit
 
 
-sys.setrecursionlimit(10000)
+class StopError(Exception):
+    pass
 
 
 class Dot:
@@ -86,7 +87,8 @@ class PONR:
                         active, passive = passive, active
                         break
                 active, passive = passive, active
-        except IndexError:
+                self.P1.train_net()
+        except StopError:
             return
 
 
@@ -98,7 +100,7 @@ class PONR:
             if Dot.x == pos[0] and Dot.y == pos[1]:
                 return Dot
 
-    def player_turn(self, player, turn_number, free_kick=False, repetition=False):
+    def player_turn(self, player, turn_number, free_kick=False, repetition=0):
         """
         Executes one player turn.
         """
@@ -112,7 +114,16 @@ class PONR:
             state = np.append(np.array(_foo), np.fliplr(np.array([np.concatenate(self.lines_data)])))
         else:
             state = np.append(np.array(_foo), np.concatenate(self.lines_data))
-        step = player.get_input(state)
+        p = player.get_input(state)
+        steps = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]
+        if repetition <= 100:
+            step = steps[np.random.choice(np.arange(8), p=p.flatten())]
+        else:
+            # fliplr ?
+            for i in np.flip(np.argsort(p).flatten(), 0):
+                step = steps[i]
+                if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]], free_kick):
+                    break
         new_pos = [self.pos[0] + step[0],
                    self.pos[1] + step[1]]
         new_state = np.array([])
@@ -122,17 +133,17 @@ class PONR:
             else:
                 reward = 1
             self.update(player, state, step, reward, new_state)
-            raise IndexError
+            raise StopError
         elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,    # goal left
                                              (self.size[1] + self.goal) // 2)] and new_pos[0] == -1:
             reward = -1
             self.update(player, state, step, reward, new_state)
-            raise IndexError
+            raise StopError
         elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,    # goal right
                                              (self.size[1] + self.goal) // 2)] and new_pos[0] == self.size[0]:
             reward = 1
             self.update(player, state, step, reward, new_state)
-            raise IndexError
+            raise StopError
         elif self.rules(prev_pos, new_pos, free_kick):
             index = (+ min(prev_pos[1], new_pos[1])
                      * (self.size[0] - 1)
@@ -149,8 +160,9 @@ class PONR:
             self.find_Dot(prev_pos).setstate(-1)
             self.find_Dot(new_pos).setstate(1)
             self.touched_points.append(new_pos)
-            self.diagonals.append([prev_pos, new_pos])
-            reward = self.reward(repetition, new_pos, prev_pos)
+            if not 0 in step:
+                self.diagonals.append([prev_pos, new_pos])
+            reward = self.reward(repetition > 0, new_pos, prev_pos)
             _foo = [0.0 for i in range(6)]
             _foo[turn_number] = 1.0
             _foo.append(int(free_kick))
@@ -161,9 +173,11 @@ class PONR:
                 new_state = np.append(np.array(_foo),
                                       np.concatenate(self.lines_data))
         else:
-            print(time.clock())
-            self.player_turn(player, turn_number, free_kick, repetition=True)
-            reward = self.reward(repetition, new_pos, prev_pos)
+            if repetition <= 100:
+                self.player_turn(player, turn_number, free_kick, repetition+1)
+                return True
+            else:
+                reward = self.reward(repetition > 0, new_pos, prev_pos)
         if player == self.P2:
             step = [-step[0], -step[1]]
         self.update(player, state, step, reward, new_state)
@@ -173,10 +187,10 @@ class PONR:
         """
         Checks if the player can move.
         """
-        for step in [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1],[-1, 0]]:
+        for step in [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]:
             if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]], False):
                 return True
-        if self.pos[0] in [0, self.size[1]] and self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2, (self.size[1] + self.goal) // 2)]:
+        if self.pos[0] in [0, self.size[1] - 1] and self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2, (self.size[1] + self.goal) // 2)]:
             return True
         return False
 
@@ -215,7 +229,7 @@ class PONR:
         TODO: add docstring
         """
         global history, rm
-        rm.update(state, action, reward, new_state)
+        rm.update(state, np.array(action), reward, new_state)
         history.add_turn([(str(int(player == self.P1)), state, np.array(action), reward)])
 
     def game_replay(self):
@@ -239,66 +253,54 @@ class Interface:
         Gets an input from the ann.
         """
         global counter
-        Qvalues = self.net.forward(np.array([data])) # 8 element array
-
-        # probability to choose an action ==> Boltzmann exploration
-        Qvalues /= (50000/counter + 0.5) # T - temperature
         counter += 1
-
+        Qvalues = self.net.forward(np.array([data])) # 8 element array
+        self.iterations += 1
+        Qvalues /= (50000/counter + 0.5) # T - temperature
+        # probability to choose an action ==> Boltzmann exploration
         # softmax
         e_x = np.exp(Qvalues - np.max(Qvalues))
         prob = e_x / e_x.sum()
-        self.step = [[-1, -1],
-                     [0, -1],
-                     [1, -1],
-                     [1, 0],
-                     [1, 1],
-                     [0, 1],
-                     [-1, 1],
-                     [-1, 0]][np.random.choice(np.arange(8), p=prob.flatten())]
-
-        self.iterations += 1
-        return self.step
+        return prob
 
     def train_net(self):
         """
         Passes the current game stats to the AI.
         """
         global number_of_turns, data_from_rm, rm
+        
         # get trainig data from replay_memory
-        rm.number_of_turns(data_from_rm)
-        data = rm.get()
+        state, action, reward, new_state = rm.get(500)
 
-        state = np.array([data[0]])
-        action = np.array([data[1]])
-        reward = np.array([[data[2]]])
-        new_state = np.array([data[3]])
-
-        for element in rm:
-            state = np.append(state, (np.array([element[0]])), axis=0)
-            action = np.append(action, (np.array([element[1]])), axis=0)
-            reward = np.append(reward, (np.array([[element[2]]])), axis=0)
-            new_state = np.append(new_state, (np.array([element[3]])), axis=0)
-
-
-        # compute desired output for training purposes
+        # ---compute desired output for training purposes---
         correctoutput = self.net.forward(state)
+        
+        #  calculate the max Qvalue of the new state
         maxQ = np.amax(self.net.forward(new_state), axis=1, keepdims=True)
-
-        # final state
-        maxQ[np.where(np.logical_or(reward == 1, reward == -1)), :] = 0
-
-
+        
+        # if final state, set Qvalue to 0 (so only reward matter)
+        maxQ[np.where(np.logical_or(reward == 1, reward == -1))] = 0
+        
+        '''if a player doesn't make his/her/its last turn, the environment
+        fully deterministic, that's why same actions result in same states 
+        ==> discounting factor = 1
+        else last turn: discounting factor = 0.9'''
         index_gamma09 = np.logical_or(np.logical_and(state[:, 6] == 1,
           state[:, 5] == 1), np.logical_and(state[:,6]==0, state[:, 2] == 1))
         gamma = np.where(index_gamma09, 0.9, 1)
         gamma = np.reshape(gamma, (-1, 1))
-
-        action_taken = ((action[:,1]+2)**2 + action[:,0]).flatten()
-        correctoutput[np.where(action_taken > 3, action_taken-1,
-          action_taken)] = reward + gamma*maxQ
-
+        
+        # get the index of the action which was chosen
+        action_taken = np.array([[0, 1, 2], [3, 8, 4], [5, 6, 7]], 
+          dtype=np.intp)[action[:,1] + 1, action[:,0] + 1]
+        
+        # update Qvalues based on current experience
+        correctoutput[np.arange(len(correctoutput), dtype=np.intp), 
+                      action_taken] = (reward + gamma*maxQ).flatten()
+        
+        # use them to train ANN
         self.trainer.train(state, correctoutput, number_of_turns)
+        print('train')
 
 
 class Saver(Thread):
@@ -312,6 +314,7 @@ class Saver(Thread):
         self.net = net
         self.rm = rm
         self.stop = False
+        atexit.register(self._stop)
 
     def run(self):
         """
@@ -322,7 +325,7 @@ class Saver(Thread):
             self.rm.save()
             time.sleep(900)
 
-    def stop(self):
+    def _stop(self):
         """
         Prevents the thread from continuing when called.
         """
@@ -340,8 +343,7 @@ if __name__ == '__main__':
     input_layer = 543
     output_layer = (8, af.tanh)
     hidden_layers = [(543, af.tanh),
-                     (543, af.tanh),
-                     (543, af.tanh)]
+                     (80, af.tanh)]
     number_of_turns = 500
     data_from_rm = 500
     net = ann.Neural_Network(path + 'DATA',
@@ -353,6 +355,4 @@ if __name__ == '__main__':
     counter = 1
     while True:
         history.setGame(hs.generateName('main_net', 'dummy_net', 1).__next__())
-        GAME = PONR(Interface('main net'),
-                    Interface('dummy net'))
-        GAME.start()
+        PONR(Interface('main net'), Interface('dummy net')).start()
