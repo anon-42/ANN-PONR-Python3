@@ -51,10 +51,10 @@ class PONR:
 
     def __init__(self, P1, P2, len_x=17, len_y=9, goal=5):
         self.pos = [int(len_x / 2), int(len_y / 2)] # Position des Spielers
-        self.lines_data = [np.array([0.0 for i in range((len_x - 1) * len_y)]),            # waagerecht
-                           np.array([0.0 for i in range(len_x * (len_y - 1))]),               # senkrecht
-                           np.array([0.0 for i in range((len_x - 1) * (len_y - 1))]),# diagonal lo ru
-                           np.array([0.0 for i in range((len_x - 1) * (len_y - 1))])]# diagonal ro lu
+        self.lines_data = [np.zeros((len_x - 1) * len_y),            # waagerecht
+                           np.zeros(len_x * (len_y - 1)),               # senkrecht
+                           np.zeros((len_x - 1) * (len_y - 1)),# diagonal lo ru
+                           np.zeros((len_x - 1) * (len_y - 1))]# diagonal ro lu
         self.touched_points = [self.pos]
         self.diagonals = []
         self.P1 = P1
@@ -126,7 +126,7 @@ class PONR:
                     break
         new_pos = [self.pos[0] + step[0],
                    self.pos[1] + step[1]]
-        new_state = np.array([])
+        new_state = np.zeros(543)
         if turn_number == 5 and new_pos in self.touched_points:
             if player == self.P1:
                 reward = -1
