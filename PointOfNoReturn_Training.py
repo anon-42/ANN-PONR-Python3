@@ -36,7 +36,7 @@ class Dot:
         self.y = y
         self.setstate(state)
 
-    def setstate(self, state): # -1 = bereits besucht, 0 = unbesetzt, 1 = aktuell besetzt
+    def setstate(self, state): # -1 = already touched, 0 = untouched, 1 = currently taken
         """
         Sets the state of Dot.
         """
@@ -50,9 +50,9 @@ class PONR:
     """
 
     def __init__(self, P1, P2, len_x=17, len_y=9, goal=5):
-        self.pos = [int(len_x / 2), int(len_y / 2)] # Position des Spielers
-        self.lines_data = [np.zeros((len_x - 1) * len_y),            # waagerecht
-                           np.zeros(len_x * (len_y - 1)),               # senkrecht
+        self.pos = [int(len_x / 2), int(len_y / 2)] # position of player
+        self.lines_data = [np.zeros((len_x - 1) * len_y),            # horizontal
+                           np.zeros(len_x * (len_y - 1)),               # perpendicular
                            np.zeros((len_x - 1) * (len_y - 1)),# diagonal lo ru
                            np.zeros((len_x - 1) * (len_y - 1))]# diagonal ro lu
         self.touched_points = [self.pos]
@@ -104,83 +104,101 @@ class PONR:
         """
         Executes one player turn.
         """
-        prev_pos = self.pos
-        if not free_kick and not self.can_move():
+        if not free_kick and not self.can_move(): # checks if move is possible, initiates free kick otherwise
             return False
+        # ---------- prepare and calculate variables for later ----------
+        prev_pos = self.pos
+        new_state = np.zeros(543)
         _foo = [0.0 for i in range(6)]
         _foo[turn_number] = 1.0
         _foo.append(int(free_kick))
+        state_P2 = np.append(np.array(_foo),
+                                  np.fliplr(np.array([np.concatenate(self.lines_data)])))
+        state_P1 = np.append(np.array(_foo),
+                          np.concatenate(self.lines_data)) # real game data
+        # ---------- completes <s,a,r,s'> tuple from end of the last turn of current player with current state as new state; includes possible free kick rewards as well ----------
+        if turn_number == 0:
+            if player.sar != []:
+                if free_kick:
+                    reward = .5 if player == self.P1 else -.5
+                    self.update(self.P1, self.P1.sar[0], self.P1.sar[1], reward, state_P1)
+                    self.update(self.P2, self.P2.sar[0], self.P2.sar[1], -reward, state_P2)
+                else:
+                    if player == self.P1:
+                        self.update(player, player.sar[0], player.sar[1], player.sar[2], state_P1)
+                    else:
+                        self.update(player, player.sar[0], player.sar[1], player.sar[2], state_P2)
         if player == self.P2:
-            state = np.append(np.array(_foo), np.fliplr(np.array([np.concatenate(self.lines_data)])))
-        else:
-            state = np.append(np.array(_foo), np.concatenate(self.lines_data))
-        p = player.get_input(state)
+            state_P1, state_P2 = state_P2, state_P1
+        # ---------- get action and apply it to dummy variable new_pos ----------
+        p = player.get_input(state_P1)
         steps = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]
         if repetition <= 100:
-            step = steps[np.random.choice(np.arange(8), p=p.flatten())]
+            step_P1 = steps[np.random.choice(np.arange(8), p=p.flatten())]
         else:
-            # fliplr ?
-            for i in np.flip(np.argsort(p).flatten(), 0):
-                step = steps[i]
-                if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]], free_kick):
+            for i in np.fliplr(np.argsort(p)).flatten():
+                step_P1 = steps[i]
+                if self.rules(self.pos, [self.pos[0] + step_P1[0], self.pos[1] + step_P1[1]], free_kick):
                     break
-        new_pos = [self.pos[0] + step[0],
-                   self.pos[1] + step[1]]
-        new_state = np.zeros(543)
-        if turn_number == 5 and new_pos in self.touched_points:
-            if player == self.P1:
-                reward = -1
-            else:
-                reward = 1
-            self.update(player, state, step, reward, new_state)
+        step_P2 = [-step_P1[0], -step_P1[1]]
+        new_pos = [self.pos[0] + step_P1[0],
+                   self.pos[1] + step_P1[1]]
+        if player == self.P2:
+            step_P1, step_P2 = step_P2, step_P1
+        # ---------- main case distinction for  ----------
+        if turn_number == 5 and new_pos in self.touched_points: # free_kick ended on already touched point
+            self.update(player, state_P1, step_P1, -1, new_state)
             raise StopError
-        elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,    # goal left
+        elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2, # goal on left side
                                              (self.size[1] + self.goal) // 2)] and new_pos[0] == -1:
-            reward = -1
-            self.update(player, state, step, reward, new_state)
+            self.update(self.P1, state_P1, step_P1, -1, new_state)
+            self.update(self.P2, state_P2, step_P2, 1, new_state)
             raise StopError
-        elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2,    # goal right
+        elif new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2, # goal on right side
                                              (self.size[1] + self.goal) // 2)] and new_pos[0] == self.size[0]:
-            reward = 1
-            self.update(player, state, step, reward, new_state)
+            self.update(self.P1, state_P1, step_P1, 1, new_state)
+            self.update(self.P2, state_P2, step_P2, -1, new_state)
             raise StopError
-        elif self.rules(prev_pos, new_pos, free_kick):
+        elif self.rules(prev_pos, new_pos, free_kick): # default case, all rules were followed
+            # ---------- apply values to own attributes -> updates game data ----------
             index = (+ min(prev_pos[1], new_pos[1])
                      * (self.size[0] - 1)
                      + min(prev_pos[0], new_pos[0]))
-            if step[0] == 0:        # senkrecht
+            if step_P1[0] == 0:        # perpendicular
                 self.lines_data[1][index] = 1
-            elif step[1] == 0:      # waagerecht
+            elif step_P1[1] == 0:      # horizontal
                 self.lines_data[0][index] = 1
-            elif step[0] == step[1]:# diagonal ro lu
+            elif step_P1[0] == step_P1[1]:# diagonal ru ld
                 self.lines_data[3][index] = 1
-            else:                   # diagonal lo ru
+            else:                   # diagonal lu rd
                 self.lines_data[2][index] = 1
             self.pos = new_pos
             self.find_Dot(prev_pos).setstate(-1)
             self.find_Dot(new_pos).setstate(1)
             self.touched_points.append(new_pos)
-            if not 0 in step:
+            if not 0 in step_P1:
                 self.diagonals.append([prev_pos, new_pos])
             reward = self.reward(repetition > 0, new_pos, prev_pos)
             _foo = [0.0 for i in range(6)]
             _foo[turn_number] = 1.0
             _foo.append(int(free_kick))
+            new_state_P2 = np.append(np.array(_foo),
+                                     np.fliplr(np.array([np.concatenate(self.lines_data)])))
+            new_state_P1 = np.append(np.array(_foo),
+                                     np.concatenate(self.lines_data))
             if player == self.P2:
-                new_state = np.append(np.array(_foo),
-                                      np.fliplr(np.array([np.concatenate(self.lines_data)])))
-            else:
-                new_state = np.append(np.array(_foo),
-                                      np.concatenate(self.lines_data))
-        else:
-            if repetition <= 100:
-                self.player_turn(player, turn_number, free_kick, repetition+1)
-                return True
-            else:
-                reward = self.reward(repetition > 0, new_pos, prev_pos)
-        if player == self.P2:
-            step = [-step[0], -step[1]]
-        self.update(player, state, step, reward, new_state)
+                new_state_P1, new_state_P2 = new_state_P2, new_state_P1
+            # ---------- saves first parts of <s,a,r,s'> tuple to call self.update on next turn of current player  ----------
+            if turn_number == 5 or (turn_number == 2 and not free_kick):
+                if player == self.P1:
+                    player.sar = [state_P1, step_P1, reward]
+                else:
+                    player.sar = [state_P2, step_P2, reward]
+            elif turn_number != 0 and repetition == 0:
+                self.update(player, state_P1, step_P1, reward, new_state_P1)
+        else:   # player tried to make step violating rules -> negative reward + repetition
+            self.update(player, state_P1, step_P1, -.5, state_P1)
+            self.player_turn(player, turn_number, free_kick, repetition+1)
         return True
 
     def can_move(self):
@@ -247,6 +265,7 @@ class Interface:
         self.trainer = tr.Trainer(self.net, eta, alpha, history)
         self.name = name if name != None else '<empty>'
         self.iterations = 0
+        self.sar = []
 
     def get_input(self, data):
         """
