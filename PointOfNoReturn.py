@@ -13,12 +13,13 @@ import tkinter as tk
 import numpy as np
 import ann
 import act_func
+import time
 
 
 class Dot:
 
     """
-    Class for tdhe points the player can visit.
+    Class for the points the player can visit.
     """
 
     def __init__(self, cvs, x, y, state=0):
@@ -70,7 +71,7 @@ class PONR:
             explanation_text = '{} spielt auf das rechte, {} auf das linke Tor.'.format(self.P1.name, self.P2.name)
 
         self.root = tk.Tk()
-        self.root.geometry(str(60 + self.size[0] * 30) + 'x' + str(30 + self.size[1] * 30))
+        self.root.geometry(str(60 + self.size[0] * 30) + 'x' + str(60 + self.size[1] * 30))
         self.root.resizable(width=False, height=False)
         self.root.update_idletasks()
         self.explanation = tk.Label(self.root,
@@ -204,7 +205,7 @@ class PONR:
         for step in [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]:
             if self.rules(self.pos, [self.pos[0] + step[0], self.pos[1] + step[1]], False):
                 return True
-        if self.pos[0] in [0, self.size[0] - 1] and self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2, (self.size[1] + self.goal) // 2)]:
+        if self.pos[0] in [0, self.size[0]] and self.pos[1] in [y for y in range((self.size[1] - self.goal) // 2, (self.size[1] + self.goal) // 2)]:
             return True
         return False
 
@@ -221,7 +222,8 @@ class PONR:
         else:
             a = True                                                                        #Regeln eingehalten, aber es ist keine Diagonale
                                                                                             #Regeln nicht eingehalten; Diagonale darf nicht gezeichnet werden
-        return ((0 <= new_pos[0] < self.size[0] and 0 <= new_pos[1] < self.size[1]) and	 #Spielfeldgroesse
+        return (((0 <= new_pos[0] < self.size[0] and 0 <= new_pos[1] < self.size[1]) or
+                (new_pos[0] in [-1, self.size[0]] and new_pos[1] in [y for y in range((self.size[1] - self.goal) // 2, (self.size[1] + self.goal) // 2)])) and	 #Spielfeldgroesse
                 ((not new_pos in self.touched_points) or free_kick) and									#Betretene Punkte nicht erneut betreten
                 (a or free_kick))                                                                  #Kreuzen der bereits vorhandenen Diagonalen
 
@@ -234,10 +236,10 @@ class PONR:
         win_msg.title('Ende')
         win_msg.geometry('200x100')
         tk.Label(win_msg,
-                 text=player.name + ' hat gewonnen!').place(x=100, y=25, anchor=tk.CENTER)
+                 text='{} hat gewonnen!'.format(player.name)).place(x=100, y=25, anchor=tk.CENTER)
         tk.Button(win_msg,
                   text='Spielverlauf ansehen',
-                  command=self.game_replay).place(x=100, y=50, anchor=tk.CENTER)
+                  command=self.game_replay).place(x=100, y=50, anchor=tk.CENTER) # TODO: implement self.game_replay
         tk.Button(win_msg,
                   text='Schließen',
                   command=win_msg.destroy).place(x=100, y=80, anchor=tk.CENTER)
@@ -307,4 +309,5 @@ class Interface:
             #              [-1, 1],
             #              [-1, 0]][np.argmax(Qvalues)]
             self.step = dict(zip(Qvalues.tolist()[0], [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]))
+            time.sleep(.5)
         return self.step
