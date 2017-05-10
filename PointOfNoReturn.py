@@ -13,7 +13,6 @@ import tkinter as tk
 import numpy as np
 import ann
 import act_func
-import trainer
 
 
 class Dot:
@@ -63,14 +62,25 @@ class PONR:
             self.goal = goal
         else:
             raise ValueError('len_x, len_y and goal must be odd numbers.')
+        if self.P2.type == 'com':
+            raise TypeError('Player 2 (second argument of PONR.__init__) must have type "human".')
+        elif self.P1.type == 'com':
+            explanation_text = 'Sie ({}) spielen auf das linke Tor.'.format(self.P2.name)
+        else:
+            explanation_text = '{} spielt auf das rechte, {} auf das linke Tor.'.format(self.P1.name, self.P2.name)
 
         self.root = tk.Tk()
         self.root.geometry(str(60 + self.size[0] * 30) + 'x' + str(30 + self.size[1] * 30))
         self.root.resizable(width=False, height=False)
         self.root.update_idletasks()
+        self.explanation = tk.Label(self.root,
+                                    width=self.root.winfo_width(),
+                                    bg='white',
+                                    font='Verdana 15',
+                                    text=explanation_text)
         self.cvs = tk.Canvas(self.root,
                              bg='white',
-                             height=self.root.winfo_height(),
+                             height=self.root.winfo_height() - self.explanation.winfo_height(),
                              width=self.root.winfo_width())
         self.cvs.create_rectangle(0,
                                   15 + 30 * (self.size[1] - self.goal) / 2,
@@ -82,7 +92,8 @@ class PONR:
                                   self.root.winfo_width(),
                                   15 + 30 * (self.size[1] + self.goal) / 2,
                                   fill='black')
-        self.cvs.pack()
+        self.explanation.pack()
+        self.cvs.pack(pady=2)
 
         self.Dots = []
         for x in range(self.size[0]):
