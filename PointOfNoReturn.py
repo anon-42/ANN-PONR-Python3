@@ -309,5 +309,4 @@ class Interface:
             #              [-1, 1],
             #              [-1, 0]][np.argmax(Qvalues)]
             self.step = dict(zip(Qvalues.tolist()[0], [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]))
-            time.sleep(.5)
         return self.step
