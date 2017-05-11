@@ -9,7 +9,7 @@ watch?v=bxe2T-V8XRs&list=PLhODcjMcdJDoBeUBHn_6BltpCXxPbt6mw&index=1
 Contains the main ANN.
 
 @author: StrategeX
-@version: beta
+@version: 1.0
 '''
 
 import numpy as np
@@ -19,14 +19,21 @@ import atexit
 
 class Neural_Network(object):
     '''
-    classdocs
+    This class builds a non-recurrent deep forward neural network with 
+    L2 regularization.
+    name        -> path and name without ending (str)
+    inputLayer  -> number of input units (int)
+    outputLayer -> (number of output units, activation function)
+    hiddenLayers-> for each layer 1 tuple in list 
+                   [(number of output units, activation function), ...]
+    Lambda      -> lambda parameter for L2 regularisation
+    version     -> which version of saved network should be load
+    readonly    -> if True, no save when instance is destroyed
     '''
 
     def __init__(self, name,  inputLayer, outputLayer, hiddenLayers=[],
                   Lambda=0.0, version=1, readonly=False):
-        '''
-        Constructor
-        '''
+
         # contains all necessary informations about the network 
         # architecture
         self.inputLayer = inputLayer
@@ -70,6 +77,9 @@ class Neural_Network(object):
             pass
 
     def randomizeNet(self):
+        ''' 
+        Allows it to reinitialize the net with random weights.
+        ''' 
         # weights
         self.weights = []
         for x in range(0, len(self.hiddenLayers)+1):
@@ -80,6 +90,10 @@ class Neural_Network(object):
         '''
         This is the normal forwardpropagation function for non recurrent
         networks.
+        inputMatrix -> 2D numpy array 
+                       (rows: data samples, columns: sequence for neurons)
+                       must have the same column size like the inputLayer
+        returns a 2D numpy array
         '''
         # reset
             # add bias units to input layer

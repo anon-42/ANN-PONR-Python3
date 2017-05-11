@@ -2,7 +2,7 @@
 Created on 22.02.2017
 
 @author: StrategeX
-@version: 1.0
+@version: 1.3
 
 Saves the data of the markov decision process and the error function of the ANN.
 '''
@@ -52,7 +52,8 @@ class generateName():
 
 class History(object):
     '''
-    classdocs
+    This class contains a collection of methods for easy data base access.
+    name  -> path and name of the database (str)
     '''
 
 
@@ -306,6 +307,9 @@ class History(object):
                   error[0], error[-1]))
 
     def plot_average_error(self):
+        '''
+        Computes the average error of a game and plots all these values.
+        '''
         self.cursor.execute('SELECT error from games')
         test =  []
         train = []
@@ -330,6 +334,9 @@ class History(object):
         plt.show()
     
     def plot_total_reward(self):
+        '''
+        Sums all the rewards of a game and shows all these sums in a plot.
+        '''
         tt_reward_list = []
         for game in self.getGames():
             self.cursor.execute('SELECT reward from {}'.format(game[0]))
