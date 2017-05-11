@@ -76,16 +76,6 @@ class Neural_Network(object):
             self.weights.append(np.random.rand(self.layerSize[x]+1, 
                                                self.layerSize[x+1])*2-1)
         
-        # recurrent layer
-        if self.recurrent is not None:
-            self.cloned_layer = self.recurrent[0]
-            self.target_layer = self.recurrent[1]
-            self.buffer = np.random.rand(self.layerSize[self.cloned_layer])
-            self.weights[self.target_layer-1] = np.random.rand(
-              (self.layerSize[self.taget_layer-1] 
-              + self.layerSize[self.cloned_layer]),
-              self.layerSize[self.target_layer])
-        
     def forward(self, inputMatrix):
         '''
         This is the normal forwardpropagation function for non recurrent
@@ -188,7 +178,7 @@ class Neural_Network(object):
 
     def check(self):
         '''
-        This method show informations about the network architecture.
+        This method shows informations about the network architecture.
         '''        
         print('__Network architectiture__')
         print('InputLayerSize: ', self.layerSize[0])

@@ -29,14 +29,11 @@ class Trainer(object):
     '''
 
 
-    def __init__(self, Net, eta, alpha, history):
+    def __init__(self, Net, alpha, history):
 
         # save error
         self.history = history
-        
-        # learning rate
-        self.eta = eta
-        
+    
         # momentum
         self.alpha = alpha
         
@@ -70,8 +67,8 @@ class Trainer(object):
         self.history.add_error(self.data)
         
     def train(self, inputMatrix, correctOutput,
-              max_iterations, test_inputMatrix=None, 
-              test_correctOutput=None):
+              max_iterations, eta,
+              test_inputMatrix=None, test_correctOutput=None):
         
         ''' 
         Method training the ANN. One method call is a lesson.
@@ -83,10 +80,14 @@ class Trainer(object):
                        layer of ANN))
         max_iterations -> int how often gradient descent is applied with the 
                        learning rate alpha
+        eta            -> learning rate 
         test_inputMatrix and test_correctOutput -> like inputMatrix and 
                        correctOutput but only for evaluation of the performance
                        of the ANN (not training on these samples)
         '''
+        # learning rate
+        self.eta = eta
+        
         # for gradient comparison (testing)
         self.inputdata_tr = inputMatrix
         self.outputdata_tr = correctOutput
@@ -201,6 +202,9 @@ class Trainer(object):
         x = np.arange(1, len(inputMatrix)+1)
         y = net_output[:, outputneuron-1]
         z = correctOutput[:, outputneuron-1]
+        indices = np.argsort(z)
+        y = y[indices]
+        z = z[indices]
         if not(points1 is None and points2 is None):
             points1 = np.arange(1, len(points1)+1)
             plt.scatter(points1, points2, 5, color='red')

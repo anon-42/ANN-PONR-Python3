@@ -6,13 +6,14 @@ Created on 22.02.2017
 
 Saves the data of the markov decision process and the error function of the ANN.
 '''
-
+from matplotlib import pyplot as plt
 import sqlite3
 import numpy as np
 import io
 import atexit
 import datetime
 import uuid
+from scipy import interpolate as ip 
 
 class NoTurnLeftException(Exception):
     def __init__(self, c_turn):
@@ -263,7 +264,11 @@ class History(object):
             .format(player,
             state[1], state[-1], action[1],
             action[-1], reward, next_state[1], next_state[-1]))
-
+    
+    def getGames(self):
+        self.cursor.execute('SELECT game from games')
+        return self.cursor.fetchall()
+        
     def deleteGame(self, game):
         with self.connection:
             self.cursor.execute('''DELETE FROM games WHERE game=(?)''',
@@ -300,6 +305,54 @@ class History(object):
                 print('| {:10} | {:10} | {:25} ... {:25} |'.format(game, turns,
                   error[0], error[-1]))
 
+    def plot_average_error(self):
+        self.cursor.execute('SELECT error from games')
+        test =  []
+        train = []
+        for element in self.cursor.fetchall():
+            element = element[0]
+            foo = np.where(element==-1, 0, element)
+            sum = np.sum(foo, axis=1)
+            div = (element.shape[1]-(np.unique(element, return_counts=True)[1][0]/2))
+            if not div == 0:
+                sum /= div
+            test.append(float(sum[1]))
+            train.append(float(sum[0]))
+        
+        fig = plt.gcf()
+        fig.canvas.set_window_title('Average error per game')
+        x = np.arange(1, len(test)+1)
+        plt.plot(x , train, label='training data')
+        plt.plot(x, test, label='testing data')
+        plt.xlabel('game')
+        plt.ylabel('error')
+        plt.legend(loc='upper left')
+        plt.show()
+    
+    def plot_total_reward(self):
+        tt_reward_list = []
+        for game in self.getGames():
+            self.cursor.execute('SELECT reward from {}'.format(game[0]))
+            sum = 0
+            for r in self.cursor.fetchall():
+                sum += r[0]
+            tt_reward_list.append(sum)
+        
+        
+        
+        fig = plt.gcf()
+        fig.canvas.set_window_title('Total reward per game')
+        x = np.arange(1, len(tt_reward_list)+1)
+        p1 = np.polyfit(x , tt_reward_list, 1)
+        plt.plot(x , tt_reward_list, label='reward')
+        plt.plot(x , np.polyval(p1, x), label='trend')
+        plt.xlabel('game')
+        plt.ylabel('reward')
+        plt.legend(loc='upper left')
+        plt.show()
+
+            
+            
     def __add__(self, other):
         '''
         This magical method overloads the + operator and makes the user able
