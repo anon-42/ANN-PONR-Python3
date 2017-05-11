@@ -260,9 +260,9 @@ class Interface:
     The game interface to a player (human / AI).
     """
     def __init__(self, name=None):
-        global eta, alpha, net, history
+        global alpha, net, history
         self.net = net
-        self.trainer = tr.Trainer(self.net, eta, alpha, history)
+        self.trainer = tr.Trainer(self.net, alpha, history)
         self.name = name if name != None else '<empty>'
         self.iterations = 0
         self.sar = []
@@ -286,40 +286,41 @@ class Interface:
         """
         Passes the current game stats to the AI.
         """
-        global number_of_turns, data_from_rm, rm
-        
+        global number_of_turns, data_from_rm, rm, eta
+
         # get trainig data from replay_memory
         state, action, reward, new_state = rm.get(500)
 
         # ---compute desired output for training purposes---
         correctoutput = self.net.forward(state)
-        
+
         #  calculate the max Qvalue of the new state
         maxQ = np.amax(self.net.forward(new_state), axis=1, keepdims=True)
-        
+
         # if final state, set Qvalue to 0 (so only reward matter)
         maxQ[np.where(np.logical_or(reward == 1, reward == -1))] = 0
-        
+
         '''if a player doesn't make his/her/its last turn, the environment
-        fully deterministic, that's why same actions result in same states 
+        fully deterministic, that's why same actions result in same states
         ==> discounting factor = 1
         else last turn: discounting factor = 0.9'''
         index_gamma09 = np.logical_or(np.logical_and(state[:, 6] == 1,
-          state[:, 5] == 1), np.logical_and(state[:,6]==0, state[:, 2] == 1))
+                                                     state[:, 5] == 1),
+                                      np.logical_and(state[:, 6] == 0,
+                                                     state[:, 2] == 1))
         gamma = np.where(index_gamma09, 0.9, 1)
         gamma = np.reshape(gamma, (-1, 1))
-        
+
         # get the index of the action which was chosen
-        action_taken = np.array([[0, 1, 2], [3, 8, 4], [5, 6, 7]], 
-          dtype=np.intp)[action[:,1] + 1, action[:,0] + 1]
-        
+        action_taken = np.array([[0, 1, 2], [3, 8, 4], [5, 6, 7]],
+                                dtype=np.intp)[action[:, 1] + 1, action[:, 0] + 1]
+
         # update Qvalues based on current experience
-        correctoutput[np.arange(len(correctoutput), dtype=np.intp), 
+        correctoutput[np.arange(len(correctoutput), dtype=np.intp),
                       action_taken] = (reward + gamma*maxQ).flatten()
-        
+
         # use them to train ANN
-        self.trainer.train(state, correctoutput, number_of_turns)
-        print('train')
+        self.trainer.train(state, correctoutput, number_of_turns, eta)
 
 
 class Saver(Thread):
@@ -361,8 +362,7 @@ if __name__ == '__main__':
     alpha = .7
     input_layer = 543
     output_layer = (8, af.tanh)
-    hidden_layers = [(543, af.tanh),
-                     (80, af.tanh)]
+    hidden_layers = [(280, af.tanh)]
     number_of_turns = 500
     data_from_rm = 500
     net = ann.Neural_Network(path + 'DATA',

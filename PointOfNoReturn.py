@@ -272,7 +272,7 @@ class Interface:
                                            (543, act_func.tanh)],
                                           .0,
                                           readonly=True)
-            self.net.load('/media/lukas/BA87-AB98/Schule/SFA 17 KNN/Softwareprodukt/trained-ANNs/DATA11.net')
+            self.net.load('/media/lukas/BA87-AB98/Schule/SFA 17 KNN/Softwareprodukt/DATA2.net')
         self.name = name if name != None else type
 
     def set_step(self, step):
@@ -309,4 +309,5 @@ class Interface:
             #              [-1, 1],
             #              [-1, 0]][np.argmax(Qvalues)]
             self.step = dict(zip(Qvalues.tolist()[0], [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]))
+            time.sleep(.4)
         return self.step
